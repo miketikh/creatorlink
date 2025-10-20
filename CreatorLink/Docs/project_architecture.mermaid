@@ -1,0 +1,62 @@
+graph TB
+    subgraph iOSClient[iOS Client - Swift and SwiftUI]
+        UI[User Interface]
+        SwiftData[(SwiftData Local Storage)]
+        FirebaseSDK[Firebase SDK]
+        
+        UI --> SwiftData
+        UI --> FirebaseSDK
+    end
+    
+    subgraph FirebaseBackend[Firebase Backend]
+        Auth[Firebase Auth - Google Sign-In]
+        Firestore[(Firestore Real-time DB)]
+        Storage[Firebase Storage - Images]
+        FCM[Firebase Cloud Messaging]
+        CloudFunctions[Cloud Functions]
+        
+        FirebaseSDK --> Auth
+        FirebaseSDK --> Firestore
+        FirebaseSDK --> Storage
+        FirebaseSDK --> FCM
+    end
+    
+    subgraph AILayer[AI Layer - Post-MVP]
+        CloudFunctions --> AIRouter{AI Router Cloud Function}
+        
+        AIRouter --> LLM[OpenAI GPT-4 or Anthropic Claude]
+        AIRouter --> VectorDB[(Vector Store Pinecone/Chroma)]
+        
+        LLM --> AgentFramework[Agent Framework LangChain/AI SDK]
+        
+        AgentFramework --> Tools{Tool Calling}
+        
+        Tools --> RAG[RAG Pipeline]
+        Tools --> Categorizer[Auto-Categorization]
+        Tools --> ResponseDrafter[Response Generator]
+        Tools --> Sentiment[Sentiment Analysis]
+        Tools --> OpportunityScorer[Opportunity Scorer]
+        
+        RAG --> VectorDB
+        RAG --> Firestore
+        
+        VectorDB -.->|Store Embeddings| Firestore
+    end
+    
+    Firestore -->|Messages| VectorDB
+    Firestore -->|Conversation History| RAG
+    
+    AgentFramework -->|AI Results| CloudFunctions
+    CloudFunctions -->|Update Metadata| Firestore
+    
+    Firestore -.->|Real-time Sync| SwiftData
+    
+    UI -->|Long Press Message| AIContextMenu[AI Context Menu]
+    AIContextMenu -->|Request| CloudFunctions
+    CloudFunctions -->|Response| UI
+    
+    style SwiftData fill:#e1f5ff
+    style Firestore fill:#fff4e1
+    style VectorDB fill:#ffe1f5
+    style LLM fill:#f0e1ff
+    style AgentFramework fill:#e1ffe1
