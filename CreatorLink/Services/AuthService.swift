@@ -87,12 +87,16 @@ class AuthService {
         let authResult = try await Auth.auth().signIn(with: credential)
 
         // Create user profile in Firestore
-        try await UserService.shared.createUserProfile(
-            userId: authResult.user.uid,
-            displayName: authResult.user.displayName ?? "Unknown User",
-            email: authResult.user.email ?? "",
-            photoURL: authResult.user.photoURL?.absoluteString
-        )
+        do {
+            try await UserService.shared.createUserProfile(
+                userId: authResult.user.uid,
+                displayName: authResult.user.displayName ?? "Unknown User",
+                email: authResult.user.email ?? "",
+                photoURL: authResult.user.photoURL?.absoluteString
+            )
+        } catch {
+            // Don't throw - allow sign-in to complete even if profile creation fails
+        }
 
         return authResult.user
     }

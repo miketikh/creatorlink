@@ -40,19 +40,20 @@ struct ContentRootView: View {
             if authService.isAuthenticated {
                 // User is signed in - show main app
                 TabView {
-                ChatsView()
-                    .tabItem {
-                        Label("Chats", systemImage: "bubble.left.and.bubble.right.fill")
-                    }
+                    ChatsView()
+                        .tabItem {
+                            Label("Chats", systemImage: "bubble.left.and.bubble.right.fill")
+                        }
 
-                ProfileView()
-                    .tabItem {
-                        Label("Profile", systemImage: "person.fill")
-                    }
+                    ProfileView()
+                        .tabItem {
+                            Label("Profile", systemImage: "person.fill")
+                        }
+                }
+            } else {
+                // User is not signed in - show auth view
+                AuthView()
             }
-        } else {
-            // User is not signed in - show auth view
-            AuthView()
         }
     }
 }
