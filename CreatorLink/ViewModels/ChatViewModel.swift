@@ -67,9 +67,11 @@ class ChatViewModel {
             isLoading = false
 
             // Set up real-time listeners
+            print("👂 [ChatViewModel] Setting up real-time listeners...")
             setupMessageListener()
             setupConversationListener()
             setupTypingListener()
+            print("✅ [ChatViewModel] loadMessages() completed successfully")
         } catch {
             print("❌ [ChatViewModel] loadMessages error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
@@ -133,11 +135,13 @@ class ChatViewModel {
             typingService.clearTyping(conversationId: conversationId, userId: currentUserId)
 
             // Update conversation's last message
+            print("🔄 [ChatViewModel] Updating conversation lastMessage to: '\(trimmedText)'")
             try await conversationService.updateLastMessage(
                 conversationId: conversationId,
                 text: trimmedText,
                 timestamp: sentMessage.timestamp
             )
+            print("✅ [ChatViewModel] Conversation lastMessage updated successfully")
 
             isSending = false
         } catch {
@@ -277,7 +281,10 @@ class ChatViewModel {
     private func setupConversationListener() {
         conversationListener?.remove()
 
-        guard let userId = currentUserId else { return }
+        guard let userId = currentUserId else {
+            print("❌ [ChatViewModel] Cannot setup conversation listener: no current user ID")
+            return
+        }
 
         // Listen to this specific conversation for updates
         conversationListener = conversationService.db
@@ -293,9 +300,13 @@ class ChatViewModel {
                         return
                     }
 
-                    guard let snapshot = snapshot, snapshot.exists else { return }
+                    guard let snapshot = snapshot, snapshot.exists else {
+                        print("❌ [ChatViewModel] Conversation document does not exist")
+                        return
+                    }
 
                     if let updatedConversation = try? snapshot.data(as: Conversation.self) {
+                        print("✅ [ChatViewModel] Conversation updated: \(updatedConversation.lastMessage)")
                         self.conversation = updatedConversation
                     }
                 }
