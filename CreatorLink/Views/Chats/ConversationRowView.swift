@@ -111,9 +111,34 @@ struct ConversationRowView: View {
     }
 
     private var formattedTimestamp: String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: conversation.lastMessageTime, relativeTo: Date())
+        let calendar = Calendar.current
+        let now = Date()
+        let messageDate = conversation.lastMessageTime
+
+        // Check if it's today
+        if calendar.isDateInToday(messageDate) {
+            let formatter = DateFormatter()
+            formatter.timeStyle = .short
+            return formatter.string(from: messageDate)
+        }
+
+        // Check if it's yesterday
+        if calendar.isDateInYesterday(messageDate) {
+            return "Yesterday"
+        }
+
+        // Check if it's within the last week
+        if let weekAgo = calendar.date(byAdding: .day, value: -7, to: now),
+           messageDate > weekAgo {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "EEEE" // Day name (e.g., "Saturday")
+            return formatter.string(from: messageDate)
+        }
+
+        // Older than a week - show date
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        return formatter.string(from: messageDate)
     }
 
     // MARK: - Methods

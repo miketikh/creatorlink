@@ -9,12 +9,17 @@ import SwiftUI
 import FirebaseAuth
 
 struct ChatDetailView: View {
-    let conversation: Conversation
+    let initialConversation: Conversation
 
     @State private var viewModel: ChatViewModel
     @State private var messageText = ""
     @State private var otherUser: UserProfile?
     @FocusState private var isInputFocused: Bool
+
+    // Computed property to get the live conversation from ViewModel
+    private var conversation: Conversation {
+        viewModel.conversation ?? initialConversation
+    }
 
     init(conversation: Conversation) {
         print("🔵 [ChatDetailView] Initializing with conversation ID: \(conversation.id ?? "nil")")
@@ -24,12 +29,12 @@ struct ChatDetailView: View {
         guard let conversationId = conversation.id, !conversationId.isEmpty else {
             print("❌ [ChatDetailView] CRITICAL: Conversation ID is nil or empty! This will cause a crash.")
             print("❌ [ChatDetailView] Creating ViewModel with fallback empty string, but this needs investigation")
-            self.conversation = conversation
+            self.initialConversation = conversation
             _viewModel = State(initialValue: ChatViewModel(conversationId: ""))
             return
         }
 
-        self.conversation = conversation
+        self.initialConversation = conversation
         _viewModel = State(initialValue: ChatViewModel(conversationId: conversationId))
     }
 
@@ -65,12 +70,17 @@ struct ChatDetailView: View {
             }
         }
         .task {
+            print("🔵 [ChatDetailView] .task triggered - loading data")
             await loadData()
         }
         .onAppear {
+            print("🔵 [ChatDetailView] onAppear - view appeared")
             Task {
                 await viewModel.markMessagesAsRead()
             }
+        }
+        .onDisappear {
+            print("🔵 [ChatDetailView] onDisappear - view disappeared, navigating back")
         }
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") {

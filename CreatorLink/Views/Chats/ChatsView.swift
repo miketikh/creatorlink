@@ -93,7 +93,12 @@ struct ChatsView: View {
     }
 
     private var conversationListView: some View {
-        List(viewModel.conversations) { conversation in
+        let _ = print("🔵 [ChatsView] Rendering conversationListView with \(viewModel.conversations.count) conversations")
+        let _ = viewModel.conversations.enumerated().forEach { index, conv in
+            print("🔵 [ChatsView] Rendering row [\(index)]: lastMessage=\(conv.lastMessage)")
+        }
+
+        return List(viewModel.conversations) { conversation in
             NavigationLink(destination: ChatDetailView(conversation: conversation)) {
                 ConversationRowView(conversation: conversation, viewModel: viewModel)
             }

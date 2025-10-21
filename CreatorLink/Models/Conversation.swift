@@ -35,12 +35,16 @@ struct Conversation: Identifiable, Codable, Hashable {
         case groupName
     }
 
-    // Hashable conformance
+    // Hashable conformance - include properties that affect UI rendering
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+        hasher.combine(lastMessage)
+        hasher.combine(lastMessageTime)
     }
 
     static func == (lhs: Conversation, rhs: Conversation) -> Bool {
-        return lhs.id == rhs.id
+        return lhs.id == rhs.id &&
+               lhs.lastMessage == rhs.lastMessage &&
+               lhs.lastMessageTime == rhs.lastMessageTime
     }
 }

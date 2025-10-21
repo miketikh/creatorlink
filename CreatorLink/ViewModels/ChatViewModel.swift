@@ -16,11 +16,13 @@ class ChatViewModel {
     var isLoading = false
     var errorMessage: String?
     var isSending = false
+    var conversation: Conversation?
 
     private let messageService = MessageService.shared
     private let conversationService = ConversationService.shared
     private let userService = UserService.shared
     private var messagesListener: ListenerRegistration?
+    private var conversationListener: ListenerRegistration?
 
     let conversationId: String
     private var currentUserId: String?
@@ -53,6 +55,7 @@ class ChatViewModel {
             print("🔍 [ChatViewModel] Fetching conversation...")
             // Load conversation to get participantIds
             if let conversation = try await conversationService.fetchConversation(conversationId: conversationId) {
+                self.conversation = conversation
                 participantIds = conversation.participantIds
                 print("✅ [ChatViewModel] Conversation fetched. ParticipantIds: \(participantIds)")
             } else {
@@ -65,9 +68,10 @@ class ChatViewModel {
             print("✅ [ChatViewModel] Fetched \(messages.count) messages")
             isLoading = false
 
-            // Set up real-time listener
-            print("👂 [ChatViewModel] Setting up real-time listener...")
-            setupListener()
+            // Set up real-time listeners
+            print("👂 [ChatViewModel] Setting up real-time listeners...")
+            setupMessageListener()
+            setupConversationListener()
             print("✅ [ChatViewModel] loadMessages() completed successfully")
         } catch {
             print("❌ [ChatViewModel] Error in loadMessages: \(error.localizedDescription)")
@@ -134,11 +138,13 @@ class ChatViewModel {
             }
 
             // Update conversation's last message
+            print("🔄 [ChatViewModel] Updating conversation lastMessage to: '\(trimmedText)'")
             try await conversationService.updateLastMessage(
                 conversationId: conversationId,
                 text: trimmedText,
                 timestamp: sentMessage.timestamp
             )
+            print("✅ [ChatViewModel] Conversation lastMessage updated successfully")
 
             isSending = false
         } catch {
@@ -177,7 +183,7 @@ class ChatViewModel {
 
     // MARK: - Private Methods
 
-    private func setupListener() {
+    private func setupMessageListener() {
         messagesListener?.remove()
 
         guard let userId = currentUserId else {
@@ -189,21 +195,33 @@ class ChatViewModel {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
 
-                // Update messages, avoiding duplicates from optimistic updates
-                var updatedMessages: [Message] = []
-                var existingIds = Set<String>()
-
-                // First, add messages from Firestore
-                for message in messages {
-                    if message.status != .sending, let messageId = message.id { // Only add messages that have been sent
-                        updatedMessages.append(message)
-                        existingIds.insert(messageId)
-                    }
+                // Build a set of optimistic message identifiers (text + senderId + rough timestamp)
+                // to match against incoming Firestore messages
+                var optimisticMessages: [String: Message] = [:]
+                for message in self.messages where message.status == .sending {
+                    let key = "\(message.senderId)|\(message.text)|\(Int(message.timestamp.timeIntervalSince1970))"
+                    optimisticMessages[key] = message
                 }
 
-                // Then, add any optimistic messages that haven't been confirmed yet
-                for message in self.messages where message.status == .sending {
-                    if let messageId = message.id, !existingIds.contains(messageId) {
+                // Process messages from Firestore
+                var updatedMessages: [Message] = []
+                var processedOptimisticKeys = Set<String>()
+
+                for message in messages {
+                    // Check if this message matches an optimistic one
+                    let key = "\(message.senderId)|\(message.text)|\(Int(message.timestamp.timeIntervalSince1970))"
+
+                    if optimisticMessages[key] != nil {
+                        // This is the confirmed version of an optimistic message
+                        processedOptimisticKeys.insert(key)
+                    }
+
+                    updatedMessages.append(message)
+                }
+
+                // Add any optimistic messages that haven't been confirmed yet
+                for (key, message) in optimisticMessages {
+                    if !processedOptimisticKeys.contains(key) {
                         updatedMessages.append(message)
                     }
                 }
@@ -216,8 +234,44 @@ class ChatViewModel {
         }
     }
 
+    private func setupConversationListener() {
+        conversationListener?.remove()
+
+        guard let userId = currentUserId else {
+            print("❌ [ChatViewModel] Cannot setup conversation listener: no current user ID")
+            return
+        }
+
+        // Listen to this specific conversation for updates
+        conversationListener = conversationService.db
+            .collection("conversations")
+            .document(conversationId)
+            .addSnapshotListener { [weak self] snapshot, error in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+
+                    if let error = error {
+                        print("❌ [ChatViewModel] Conversation listener error: \(error.localizedDescription)")
+                        return
+                    }
+
+                    guard let snapshot = snapshot, snapshot.exists else {
+                        print("❌ [ChatViewModel] Conversation document does not exist")
+                        return
+                    }
+
+                    if let updatedConversation = try? snapshot.data(as: Conversation.self) {
+                        print("✅ [ChatViewModel] Conversation updated: \(updatedConversation.lastMessage)")
+                        self.conversation = updatedConversation
+                    }
+                }
+            }
+    }
+
     func cleanup() {
         messagesListener?.remove()
         messagesListener = nil
+        conversationListener?.remove()
+        conversationListener = nil
     }
 }

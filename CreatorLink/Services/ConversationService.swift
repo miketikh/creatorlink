@@ -12,7 +12,7 @@ import FirebaseFirestore
 class ConversationService {
     static let shared = ConversationService()
 
-    private let db = FirestoreService.shared.db
+    let db = FirestoreService.shared.db
     private let conversationsCollection = FirestoreService.shared.conversationsCollection
 
     private init() {}
@@ -151,12 +151,17 @@ class ConversationService {
     ///   - text: The text of the last message
     ///   - timestamp: The timestamp of the last message
     func updateLastMessage(conversationId: String, text: String, timestamp: Date) async throws {
+        print("🔄 [ConversationService] updateLastMessage called for conversationId: \(conversationId)")
+        print("🔄 [ConversationService] New lastMessage: '\(text)', timestamp: \(timestamp)")
+
         do {
             try await conversationsCollection.document(conversationId).updateData([
                 "lastMessage": text,
                 "lastMessageTime": Timestamp(date: timestamp)
             ])
+            print("✅ [ConversationService] Firestore update completed successfully")
         } catch {
+            print("❌ [ConversationService] Firestore update failed: \(error.localizedDescription)")
             throw ConversationError.updateFailed(error)
         }
     }
