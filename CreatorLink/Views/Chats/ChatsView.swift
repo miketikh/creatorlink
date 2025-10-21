@@ -46,9 +46,7 @@ struct ChatsView: View {
                     savedScrollPosition: scrollPositions[conversation.id ?? ""],
                     onScrollPositionChanged: { messageId in
                         if let conversationId = conversation.id {
-                            print("💾 [ChatsView] Saving scroll position for conversation \(conversationId): \(messageId ?? "nil")")
                             scrollPositions[conversationId] = messageId
-                            print("💾 [ChatsView] Scroll positions dictionary now has \(scrollPositions.count) entries")
                         }
                     }
                 )
@@ -104,12 +102,7 @@ struct ChatsView: View {
     }
 
     private var conversationListView: some View {
-        let _ = print("🔵 [ChatsView] Rendering conversationListView with \(viewModel.conversations.count) conversations")
-        let _ = viewModel.conversations.enumerated().forEach { index, conv in
-            print("🔵 [ChatsView] Rendering row [\(index)]: lastMessage=\(conv.lastMessage)")
-        }
-
-        return List(viewModel.conversations) { conversation in
+        List(viewModel.conversations) { conversation in
             Button {
                 selectedConversation = conversation
             } label: {

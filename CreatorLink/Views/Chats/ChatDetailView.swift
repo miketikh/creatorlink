@@ -29,14 +29,8 @@ struct ChatDetailView: View {
     }
 
     init(conversation: Conversation, savedScrollPosition: String? = nil, onScrollPositionChanged: @escaping (String?) -> Void = { _ in }) {
-        print("🔵 [ChatDetailView] Initializing with conversation ID: \(conversation.id ?? "nil")")
-        print("🔵 [ChatDetailView] Conversation participantIds: \(conversation.participantIds)")
-        print("🔵 [ChatDetailView] Saved scroll position: \(savedScrollPosition ?? "none")")
-
         // Ensure conversation has a valid ID
         guard let conversationId = conversation.id, !conversationId.isEmpty else {
-            print("❌ [ChatDetailView] CRITICAL: Conversation ID is nil or empty! This will cause a crash.")
-            print("❌ [ChatDetailView] Creating ViewModel with fallback empty string, but this needs investigation")
             self.initialConversation = conversation
             self.savedScrollPosition = savedScrollPosition
             self.onScrollPositionChanged = onScrollPositionChanged
@@ -106,7 +100,6 @@ struct ChatDetailView: View {
             }
         }
         .onAppear {
-            print("🔵 [ChatDetailView] onAppear - view appeared")
             // Set view as active to prevent auto-delivery race condition
             viewModel.isViewActive = true
             // Also mark messages as read when view appears (handles navigation back)
@@ -115,9 +108,7 @@ struct ChatDetailView: View {
             }
         }
         .onDisappear {
-            print("🔵 [ChatDetailView] onDisappear - view disappeared, navigating back")
             // Save scroll position before leaving
-            print("📜 [ChatDetailView] Saving scroll position: \(scrollPosition ?? "nil")")
             onScrollPositionChanged(scrollPosition)
 
             // Set view as inactive so auto-delivery can run for background messages
@@ -193,15 +184,12 @@ struct ChatDetailView: View {
                 }
             }
             .task {
-                print("🔵 [ChatDetailView] .task triggered - loading data")
                 await loadData()
 
                 // Scroll to saved position or bottom AFTER messages load
                 if let savedPos = savedScrollPosition {
-                    print("📜 [ChatDetailView] Restoring saved scroll position: \(savedPos)")
                     proxy.scrollTo(savedPos, anchor: .top)
                 } else if let lastMessage = viewModel.messages.last {
-                    print("📜 [ChatDetailView] No saved position, scrolling to bottom: \(lastMessage.id ?? "nil")")
                     proxy.scrollTo(lastMessage.id, anchor: .bottom)
                 }
 
@@ -308,16 +296,11 @@ struct ChatDetailView: View {
     // MARK: - Methods
 
     private func loadData() async {
-        print("🔵 [ChatDetailView] loadData() started")
         await viewModel.loadMessages()
-        print("🔵 [ChatDetailView] viewModel.loadMessages() completed")
 
         if !conversation.isGroupChat {
-            print("🔵 [ChatDetailView] Loading other user...")
             await loadOtherUser()
-            print("🔵 [ChatDetailView] loadOtherUser() completed")
         }
-        print("✅ [ChatDetailView] loadData() completed")
     }
 
     private func loadOtherUser() async {

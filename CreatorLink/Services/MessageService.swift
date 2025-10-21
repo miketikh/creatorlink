@@ -83,13 +83,11 @@ class MessageService {
                     let message = try document.data(as: Message.self)
                     messages.append(message)
                 } catch {
-                    print("❌ [MessageService] Failed to decode message: \(document.documentID)")
                 }
             }
 
             return messages
         } catch {
-            print("❌ [MessageService] Error fetching messages: \(error.localizedDescription)")
             throw MessageError.fetchFailed(error)
         }
     }
@@ -109,7 +107,6 @@ class MessageService {
             .order(by: "timestamp", descending: false)
             .addSnapshotListener { snapshot, error in
                 guard let snapshot = snapshot else {
-                    print("❌ [MessageService] Listener error: \(error?.localizedDescription ?? "Unknown")")
                     return
                 }
 
@@ -131,13 +128,11 @@ class MessageService {
     ///   - messageId: The ID of the message to update
     ///   - status: The new status
     func updateMessageStatus(messageId: String, status: MessageStatus) async throws {
-        print("📝 [STATUS] Updating \(messageId.prefix(8)) → \(status.rawValue)")
         do {
             try await messagesCollection.document(messageId).updateData([
                 "status": status.rawValue
             ])
         } catch {
-            print("❌ [STATUS] Update failed: \(error.localizedDescription)")
             throw MessageError.updateFailed(error)
         }
     }
@@ -166,8 +161,6 @@ class MessageService {
     func markMessagesAsRead(messageIds: [String], userId: String) async throws {
         guard !messageIds.isEmpty else { return }
 
-        print("📖 [STATUS] Marking \(messageIds.count) messages as READ")
-
         do {
             let batch = db.batch()
 
@@ -181,9 +174,7 @@ class MessageService {
             }
 
             try await batch.commit()
-            print("✅ [STATUS] Marked \(messageIds.count) as READ")
         } catch {
-            print("❌ [STATUS] Mark as read failed: \(error.localizedDescription)")
             throw MessageError.updateFailed(error)
         }
     }

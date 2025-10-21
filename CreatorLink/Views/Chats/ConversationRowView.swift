@@ -244,7 +244,6 @@ struct ConversationRowView: View {
         // Initial fetch of unread count
         let count = await viewModel.getUnreadCount(for: conversation)
         unreadCount = count
-        print("📬 [ConversationRowView] Loaded unread count for conversation \(conversation.id ?? "nil"): \(count)")
 
         // Set up real-time listener to update unread count when messages change
         setupUnreadCountListener()
@@ -268,7 +267,6 @@ struct ConversationRowView: View {
 
             Task { @MainActor in
                 if self.unreadCount != newUnreadCount {
-                    print("📬 [ConversationRowView] Unread count changed from \(self.unreadCount) to \(newUnreadCount)")
                     self.unreadCount = newUnreadCount
                 }
             }

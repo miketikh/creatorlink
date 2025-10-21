@@ -67,13 +67,10 @@ class ChatViewModel {
             isLoading = false
 
             // Set up real-time listeners
-            print("👂 [ChatViewModel] Setting up real-time listeners...")
             setupMessageListener()
             setupConversationListener()
             setupTypingListener()
-            print("✅ [ChatViewModel] loadMessages() completed successfully")
         } catch {
-            print("❌ [ChatViewModel] loadMessages error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             isLoading = false
         }
@@ -111,7 +108,6 @@ class ChatViewModel {
 
         // Add to messages array immediately (optimistic update)
         messages.append(tempMessage)
-        print("📤 [SEND] Optimistic: \(tempMessage.id?.prefix(8) ?? "?") status=\(tempMessage.status.rawValue)")
         isSending = true
 
         do {
@@ -123,8 +119,6 @@ class ChatViewModel {
                 participantIds: participantIds
             )
 
-            print("✅ [SEND] Confirmed: \(sentMessage.id?.prefix(8) ?? "?") status=\(sentMessage.status.rawValue)")
-
             // Replace temporary message with real message
             if let tempId = tempMessage.id,
                let index = messages.firstIndex(where: { $0.id == tempId }) {
@@ -135,13 +129,11 @@ class ChatViewModel {
             typingService.clearTyping(conversationId: conversationId, userId: currentUserId)
 
             // Update conversation's last message
-            print("🔄 [ChatViewModel] Updating conversation lastMessage to: '\(trimmedText)'")
             try await conversationService.updateLastMessage(
                 conversationId: conversationId,
                 text: trimmedText,
                 timestamp: sentMessage.timestamp
             )
-            print("✅ [ChatViewModel] Conversation lastMessage updated successfully")
 
             isSending = false
         } catch {
@@ -151,7 +143,6 @@ class ChatViewModel {
                 messages.remove(at: index)
             }
 
-            print("❌ [SEND] Failed: \(error.localizedDescription)")
             errorMessage = "Failed to send message: \(error.localizedDescription)"
             isSending = false
         }
@@ -176,7 +167,6 @@ class ChatViewModel {
             // Use batch update for efficiency
             try await messageService.markMessagesAsRead(messageIds: messageIds, userId: currentUserId)
         } catch {
-            print("❌ [ChatViewModel] Failed to mark as read: \(error.localizedDescription)")
             // Don't throw - this is a non-critical operation that shouldn't block the UI
         }
     }
@@ -220,7 +210,6 @@ class ChatViewModel {
         messagesListener?.remove()
 
         guard let userId = currentUserId else {
-            print("❌ [ChatViewModel] Cannot setup listener: no current user ID")
             return
         }
 
@@ -265,13 +254,6 @@ class ChatViewModel {
 
                 self.messages = updatedMessages
 
-                // Log last 5 messages after update (enough to debug, won't eat context)
-                let last5 = updatedMessages.suffix(5)
-                for msg in last5 {
-                    let isMine = msg.senderId == userId ? "MINE" : "THEIRS"
-                    print("📨 [LISTENER] \(msg.id?.prefix(8) ?? "?") [\(isMine)] status=\(msg.status.rawValue)")
-                }
-
                 // NOTE: Auto-delivery is now handled by global listener in CreatorLinkApp.swift
                 // This prevents duplicate updates and ensures delivery marking works even when chat is not open
             }
@@ -282,7 +264,6 @@ class ChatViewModel {
         conversationListener?.remove()
 
         guard let userId = currentUserId else {
-            print("❌ [ChatViewModel] Cannot setup conversation listener: no current user ID")
             return
         }
 
@@ -296,17 +277,14 @@ class ChatViewModel {
                     guard let self = self else { return }
 
                     if let error = error {
-                        print("❌ [ChatViewModel] Conversation listener error: \(error.localizedDescription)")
                         return
                     }
 
                     guard let snapshot = snapshot, snapshot.exists else {
-                        print("❌ [ChatViewModel] Conversation document does not exist")
                         return
                     }
 
                     if let updatedConversation = try? snapshot.data(as: Conversation.self) {
-                        print("✅ [ChatViewModel] Conversation updated: \(updatedConversation.lastMessage)")
                         self.conversation = updatedConversation
                     }
                 }

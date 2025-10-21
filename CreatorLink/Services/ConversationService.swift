@@ -51,7 +51,6 @@ class ConversationService {
                 groupName: nil
             )
 
-            print("✨ [ConversationService] Created new conversation: \(docRef.documentID)")
             return conversation
         } catch {
             throw ConversationError.creationFailed(error)
@@ -64,21 +63,16 @@ class ConversationService {
     /// - Parameter conversationId: The ID of the conversation
     /// - Returns: The Conversation if found
     func fetchConversation(conversationId: String) async throws -> Conversation? {
-        print("🔍 [ConversationService] fetchConversation called for ID: \(conversationId)")
         do {
             let document = try await conversationsCollection.document(conversationId).getDocument()
-            print("📄 [ConversationService] Document fetched. Exists: \(document.exists)")
 
             guard document.exists else {
-                print("❌ [ConversationService] Document does not exist")
                 return nil
             }
 
             let conversation = try document.data(as: Conversation.self)
-            print("✅ [ConversationService] Conversation decoded successfully. ID: \(conversation.id ?? "nil"), ParticipantIds: \(conversation.participantIds)")
             return conversation
         } catch {
-            print("❌ [ConversationService] Error fetching conversation: \(error.localizedDescription)")
             throw ConversationError.fetchFailed(error)
         }
     }
@@ -114,31 +108,23 @@ class ConversationService {
     ///   - completion: Closure called with updated conversations array
     /// - Returns: ListenerRegistration for cleanup
     func listenToConversations(userId: String, completion: @escaping ([Conversation]) -> Void) -> ListenerRegistration {
-        print("👂 [ConversationService] Setting up listener for userId: \(userId)")
         return conversationsCollection
             .whereField("participantIds", arrayContains: userId)
             .order(by: "lastMessageTime", descending: true)
             .addSnapshotListener { snapshot, error in
                 guard let snapshot = snapshot else {
-                    print("❌ [ConversationService] Listener error: \(error?.localizedDescription ?? "Unknown error")")
                     return
                 }
 
-                print("📊 [ConversationService] Listener received \(snapshot.documents.count) documents")
-
                 var conversations: [Conversation] = []
                 for document in snapshot.documents {
-                    print("📄 [ConversationService] Processing document ID: \(document.documentID)")
                     do {
                         let conversation = try document.data(as: Conversation.self)
-                        print("✅ [ConversationService] Decoded conversation. ID from model: \(conversation.id ?? "nil"), ID from document: \(document.documentID)")
                         conversations.append(conversation)
                     } catch {
-                        print("❌ [ConversationService] Failed to decode conversation: \(error)")
                     }
                 }
 
-                print("✅ [ConversationService] Listener returning \(conversations.count) conversations")
                 completion(conversations)
             }
     }
@@ -151,17 +137,12 @@ class ConversationService {
     ///   - text: The text of the last message
     ///   - timestamp: The timestamp of the last message
     func updateLastMessage(conversationId: String, text: String, timestamp: Date) async throws {
-        print("🔄 [ConversationService] updateLastMessage called for conversationId: \(conversationId)")
-        print("🔄 [ConversationService] New lastMessage: '\(text)', timestamp: \(timestamp)")
-
         do {
             try await conversationsCollection.document(conversationId).updateData([
                 "lastMessage": text,
                 "lastMessageTime": Timestamp(date: timestamp)
             ])
-            print("✅ [ConversationService] Firestore update completed successfully")
         } catch {
-            print("❌ [ConversationService] Firestore update failed: \(error.localizedDescription)")
             throw ConversationError.updateFailed(error)
         }
     }
@@ -174,7 +155,6 @@ class ConversationService {
     /// - Returns: Existing Conversation if found, nil otherwise
     func findExistingConversation(participantIds: [String], currentUserId: String) async throws -> Conversation? {
         let sortedIds = Set(participantIds.sorted())
-        print("🔍 [ConversationService] Finding conversation for participants: \(participantIds)")
 
         do {
             // Query for conversations that contain the current user
@@ -183,36 +163,20 @@ class ConversationService {
                 .whereField("participantIds", arrayContains: currentUserId)
                 .getDocuments()
 
-            print("📊 [ConversationService] Query returned \(snapshot.documents.count) conversations")
-
             // Filter to find conversations with exact participant match
-            var decodedCount = 0
-            var matchingCount = 0
-
             for document in snapshot.documents {
-                print("📄 [ConversationService] Document ID: \(document.documentID)")
-
                 if let conversation = try? document.data(as: Conversation.self) {
-                    decodedCount += 1
-                    print("✅ [ConversationService] Decoded conversation ID: \(conversation.id ?? "nil"), participants: \(conversation.participantIds)")
-
                     let conversationParticipants = Set(conversation.participantIds.sorted())
 
                     // Check if the participant sets match exactly
                     if conversationParticipants == sortedIds {
-                        matchingCount += 1
-                        print("🎯 [ConversationService] Found matching conversation: \(conversation.id ?? "nil")")
                         return conversation
                     }
-                } else {
-                    print("❌ [ConversationService] Failed to decode conversation from document: \(document.documentID)")
                 }
             }
 
-            print("📈 [ConversationService] Summary - Decoded: \(decodedCount)/\(snapshot.documents.count), Matching: \(matchingCount)")
             return nil
         } catch {
-            print("❌ [ConversationService] Error: \(error.localizedDescription)")
             throw ConversationError.fetchFailed(error)
         }
     }

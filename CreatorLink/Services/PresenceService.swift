@@ -24,8 +24,6 @@ class PresenceService {
 
     /// Sets up presence for the current user
     func setupPresence(userId: String) {
-        print("🟢 [PresenceService] Setting up presence for user: \(userId)")
-
         // Set online in RTDB with onDisconnect handler
         let presenceRef = rtdb.child("presence").child(userId)
 
@@ -41,14 +39,10 @@ class PresenceService {
         Task {
             try? await UserService.shared.updateOnlineStatus(userId: userId, isOnline: true)
         }
-
-        print("✅ [PresenceService] Presence setup complete for user: \(userId)")
     }
 
     /// Sets user as online
     func setOnline(userId: String) {
-        print("🟢 [PresenceService] Setting user online: \(userId)")
-
         // Cancel any pending offline timer
         offlineTimer?.invalidate()
         offlineTimer = nil
@@ -65,8 +59,6 @@ class PresenceService {
 
     /// Sets user as offline with optional delay (grace period)
     func setOffline(userId: String, delay: TimeInterval = 0) {
-        print("🔴 [PresenceService] Setting user offline: \(userId) (delay: \(delay)s)")
-
         // Cancel any existing timer
         offlineTimer?.invalidate()
 
@@ -82,8 +74,6 @@ class PresenceService {
     }
 
     private func performSetOffline(userId: String) {
-        print("🔴 [PresenceService] Performing offline update for user: \(userId)")
-
         let presenceRef = rtdb.child("presence").child(userId)
         presenceRef.child("isOnline").setValue(false)
         presenceRef.child("lastSeen").setValue(ServerValue.timestamp())
@@ -96,7 +86,6 @@ class PresenceService {
 
     /// Cancels pending offline timer (used when app returns to foreground)
     func cancelOfflineTimer() {
-        print("⏹️ [PresenceService] Cancelling offline timer")
         offlineTimer?.invalidate()
         offlineTimer = nil
     }

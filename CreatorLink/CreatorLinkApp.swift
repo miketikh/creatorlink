@@ -44,18 +44,16 @@ struct CreatorLinkApp: App {
 
         switch newPhase {
         case .active:
-            print("🟢 [App] Scene became active")
             // App entered foreground - set user online
             PresenceService.shared.cancelOfflineTimer()
             PresenceService.shared.setOnline(userId: userId)
 
         case .inactive:
-            print("🟡 [App] Scene became inactive")
             // App is temporarily inactive (e.g., receiving a phone call)
             // Don't change presence yet
+            break
 
         case .background:
-            print("🔴 [App] Scene entered background")
             // App entered background - set user offline after 30 second grace period
             PresenceService.shared.setOffline(userId: userId, delay: 30)
 
@@ -113,8 +111,6 @@ struct ContentRootView: View {
     /// Sets up a global listener that marks messages as "delivered" when they arrive
     /// This runs app-wide, even when specific chat views aren't open
     private func setupGlobalMessageDeliveryListener(userId: String) {
-        print("🌐 [App] Setting up global message delivery listener for user: \(userId)")
-
         // Remove existing listener if any
         messageDeliveryListener?.remove()
 
@@ -124,9 +120,6 @@ struct ContentRootView: View {
             .whereField("participantIds", arrayContains: userId)
             .addSnapshotListener { snapshot, error in
                 guard let snapshot = snapshot else {
-                    if let error = error {
-                        print("❌ [App] Global message listener error: \(error.localizedDescription)")
-                    }
                     return
                 }
 
@@ -149,14 +142,11 @@ struct ContentRootView: View {
                         // Mark as delivered in background
                         Task {
                             do {
-                                print("🌐 [App] Auto-marking message \(messageId.prefix(8)) as DELIVERED (global listener)")
                                 try await MessageService.shared.updateMessageStatus(messageId: messageId, status: .delivered)
                             } catch {
-                                print("❌ [App] Failed to mark message as delivered: \(error.localizedDescription)")
                             }
                         }
                     } catch {
-                        print("❌ [App] Failed to decode message: \(error.localizedDescription)")
                     }
                 }
             }
