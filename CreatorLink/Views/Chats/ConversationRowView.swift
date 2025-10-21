@@ -20,6 +20,8 @@ struct ConversationRowView: View {
     @State private var unreadCountTask: Task<Void, Never>?
     @State private var messageListener: ListenerRegistration?
     @State private var presenceHandle: DatabaseHandle?
+    @State private var typingHandle: DatabaseHandle?
+    @State private var isOtherUserTyping = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -47,19 +49,26 @@ struct ConversationRowView: View {
                     .foregroundColor(.primary)
                     .fontWeight(unreadCount > 0 ? .bold : .semibold)
 
-                // Always show last message with status icon
-                HStack(spacing: 4) {
-                    // Show status icon if last message is from current user
-                    if let senderId = conversation.lastMessageSenderId,
-                       senderId == viewModel.currentUserId,
-                       let status = conversation.lastMessageStatus {
-                        statusIcon(for: status)
-                    }
-
-                    Text(conversation.lastMessage)
+                // Show typing indicator or last message
+                if isOtherUserTyping {
+                    Text("typing...")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-                        .lineLimit(2)
+                        .italic()
+                } else {
+                    HStack(spacing: 4) {
+                        // Show status icon if last message is from current user
+                        if let senderId = conversation.lastMessageSenderId,
+                           senderId == viewModel.currentUserId,
+                           let status = conversation.lastMessageStatus {
+                            statusIcon(for: status)
+                        }
+
+                        Text(conversation.lastMessage)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
                 }
             }
 
@@ -88,6 +97,7 @@ struct ConversationRowView: View {
         .task {
             await loadOtherUser()
             await loadUnreadCount()
+            setupTypingListener()
         }
         .onAppear {
             // Refresh unread count when view appears (e.g., returning from chat)
@@ -103,6 +113,11 @@ struct ConversationRowView: View {
             // Clean up presence listener
             if let otherUserId = otherUser?.id, let handle = presenceHandle {
                 PresenceService.shared.removePresenceListener(userId: otherUserId, handle: handle)
+            }
+
+            // Clean up typing listener
+            if let conversationId = conversation.id, let handle = typingHandle {
+                TypingService.shared.removeTypingListener(conversationId: conversationId, handle: handle)
             }
         }
     }
@@ -256,6 +271,24 @@ struct ConversationRowView: View {
                     print("📬 [ConversationRowView] Unread count changed from \(self.unreadCount) to \(newUnreadCount)")
                     self.unreadCount = newUnreadCount
                 }
+            }
+        }
+    }
+
+    private func setupTypingListener() {
+        guard let conversationId = conversation.id,
+              let currentUserId = viewModel.currentUserId else {
+            return
+        }
+
+        // Listen to typing indicators for this conversation
+        typingHandle = TypingService.shared.listenToTyping(
+            conversationId: conversationId,
+            currentUserId: currentUserId
+        ) { [self] typingUserIds in
+            Task { @MainActor in
+                // Update typing state - we only care if ANYONE else is typing
+                self.isOtherUserTyping = !typingUserIds.isEmpty
             }
         }
     }
