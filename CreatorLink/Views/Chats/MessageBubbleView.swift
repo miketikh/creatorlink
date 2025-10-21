@@ -69,51 +69,44 @@ struct MessageBubbleView: View {
     }
 
     private var statusIcon: some View {
-        HStack(spacing: 4) {
-            // DEBUG: Show status text
-            Text(message.status.rawValue)
-                .font(.caption2)
-                .foregroundColor(.red)
+        Group {
+            switch message.status {
+            case .sending:
+                // Clock icon for messages being sent
+                Image(systemName: "clock")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
 
-            Group {
-                switch message.status {
-                case .sending:
-                    // Clock icon for messages being sent
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+            case .sent:
+                // Single checkmark (gray) for sent messages
+                Image(systemName: "checkmark")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
 
-                case .sent:
-                    // Single checkmark (gray) for sent messages
+            case .delivered:
+                // Double checkmark (gray) - two overlapping single checkmarks
+                ZStack {
                     Image(systemName: "checkmark")
                         .font(.caption2)
                         .foregroundColor(.secondary)
+                        .offset(x: -2)
+                    Image(systemName: "checkmark")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .offset(x: 2)
+                }
 
-                case .delivered:
-                    // Double checkmark (gray) - two overlapping single checkmarks
-                    ZStack {
-                        Image(systemName: "checkmark")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .offset(x: -2)
-                        Image(systemName: "checkmark")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .offset(x: 2)
-                    }
-
-                case .read:
-                    // Double checkmark (blue) - two overlapping single checkmarks
-                    ZStack {
-                        Image(systemName: "checkmark")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                            .offset(x: -2)
-                        Image(systemName: "checkmark")
-                            .font(.caption2)
-                            .foregroundColor(.blue)
-                            .offset(x: 2)
-                    }
+            case .read:
+                // Double checkmark (blue) - two overlapping single checkmarks
+                ZStack {
+                    Image(systemName: "checkmark")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                        .offset(x: -2)
+                    Image(systemName: "checkmark")
+                        .font(.caption2)
+                        .foregroundColor(.blue)
+                        .offset(x: 2)
                 }
             }
         }

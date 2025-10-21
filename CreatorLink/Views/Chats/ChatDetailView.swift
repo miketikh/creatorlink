@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseAuth
+import FirebaseDatabase
 
 struct ChatDetailView: View {
     let initialConversation: Conversation
@@ -16,6 +17,7 @@ struct ChatDetailView: View {
     @State private var otherUser: UserProfile?
     @State private var isOnline = false
     @State private var lastSeen: Date?
+    @State private var presenceHandle: DatabaseHandle?
     @FocusState private var isInputFocused: Bool
 
     // Computed property to get the live conversation from ViewModel
@@ -113,6 +115,11 @@ struct ChatDetailView: View {
             // Set view as inactive so auto-delivery can run for background messages
             viewModel.isViewActive = false
             viewModel.cleanup()
+
+            // Clean up presence listener
+            if let otherUserId = otherUser?.id, let handle = presenceHandle {
+                PresenceService.shared.removePresenceListener(userId: otherUserId, handle: handle)
+            }
         }
         .alert("Error", isPresented: .constant(viewModel.errorMessage != nil)) {
             Button("OK") {
@@ -294,7 +301,7 @@ struct ChatDetailView: View {
     }
 
     private func listenToPresence(userId: String) {
-        _ = PresenceService.shared.listenToPresence(userId: userId) { [self] online, lastSeenDate in
+        presenceHandle = PresenceService.shared.listenToPresence(userId: userId) { [self] online, lastSeenDate in
             Task { @MainActor in
                 self.isOnline = online
                 self.lastSeen = lastSeenDate
@@ -303,9 +310,7 @@ struct ChatDetailView: View {
     }
 
     private func formattedLastSeen(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return "Last seen \(formatter.localizedString(for: date, relativeTo: Date()))"
+        DateFormatters.formatLastOnline(date)
     }
 
     private func sendMessage() async {

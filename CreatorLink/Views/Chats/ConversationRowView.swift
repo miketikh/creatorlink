@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseFirestore
+import FirebaseDatabase
 
 struct ConversationRowView: View {
     let conversation: Conversation
@@ -18,17 +19,18 @@ struct ConversationRowView: View {
     @State private var unreadCount = 0
     @State private var unreadCountTask: Task<Void, Never>?
     @State private var messageListener: ListenerRegistration?
+    @State private var presenceHandle: DatabaseHandle?
 
     var body: some View {
         HStack(spacing: 12) {
-            // Profile photo with online indicator
+            // Profile photo with online/offline indicator
             ZStack(alignment: .bottomTrailing) {
                 profilePhoto
 
-                // Online indicator (green dot)
-                if isOnline && !conversation.isGroupChat {
+                // Online/offline indicator (green or grey dot)
+                if !conversation.isGroupChat {
                     Circle()
-                        .fill(Color.green)
+                        .fill(isOnline ? Color.green : Color.gray)
                         .frame(width: 12, height: 12)
                         .overlay(
                             Circle()
@@ -45,25 +47,19 @@ struct ConversationRowView: View {
                     .foregroundColor(.primary)
                     .fontWeight(unreadCount > 0 ? .bold : .semibold)
 
-                // Show last seen if offline, otherwise show last message with status
-                if !isOnline && !conversation.isGroupChat, let lastSeen = lastSeen {
-                    Text(formattedLastSeen(lastSeen))
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                } else {
-                    HStack(spacing: 4) {
-                        // Show status icon if last message is from current user
-                        if let senderId = conversation.lastMessageSenderId,
-                           senderId == viewModel.currentUserId,
-                           let status = conversation.lastMessageStatus {
-                            statusIcon(for: status)
-                        }
-
-                        Text(conversation.lastMessage)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
+                // Always show last message with status icon
+                HStack(spacing: 4) {
+                    // Show status icon if last message is from current user
+                    if let senderId = conversation.lastMessageSenderId,
+                       senderId == viewModel.currentUserId,
+                       let status = conversation.lastMessageStatus {
+                        statusIcon(for: status)
                     }
+
+                    Text(conversation.lastMessage)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
                 }
             }
 
@@ -103,6 +99,11 @@ struct ConversationRowView: View {
         .onDisappear {
             unreadCountTask?.cancel()
             messageListener?.remove()
+
+            // Clean up presence listener
+            if let otherUserId = otherUser?.id, let handle = presenceHandle {
+                PresenceService.shared.removePresenceListener(userId: otherUserId, handle: handle)
+            }
         }
     }
 
@@ -172,34 +173,7 @@ struct ConversationRowView: View {
     }
 
     private var formattedTimestamp: String {
-        let calendar = Calendar.current
-        let now = Date()
-        let messageDate = conversation.lastMessageTime
-
-        // Check if it's today
-        if calendar.isDateInToday(messageDate) {
-            let formatter = DateFormatter()
-            formatter.timeStyle = .short
-            return formatter.string(from: messageDate)
-        }
-
-        // Check if it's yesterday
-        if calendar.isDateInYesterday(messageDate) {
-            return "Yesterday"
-        }
-
-        // Check if it's within the last week
-        if let weekAgo = calendar.date(byAdding: .day, value: -7, to: now),
-           messageDate > weekAgo {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "EEEE" // Day name (e.g., "Saturday")
-            return formatter.string(from: messageDate)
-        }
-
-        // Older than a week - show date
-        let formatter = DateFormatter()
-        formatter.dateStyle = .short
-        return formatter.string(from: messageDate)
+        DateFormatters.formatMessageTimestamp(conversation.lastMessageTime)
     }
 
     // MARK: - Methods
@@ -216,7 +190,7 @@ struct ConversationRowView: View {
     }
 
     private func listenToPresence(userId: String) {
-        _ = PresenceService.shared.listenToPresence(userId: userId) { [self] online, lastSeenDate in
+        presenceHandle = PresenceService.shared.listenToPresence(userId: userId) { [self] online, lastSeenDate in
             Task { @MainActor in
                 self.isOnline = online
                 self.lastSeen = lastSeenDate
@@ -225,9 +199,7 @@ struct ConversationRowView: View {
     }
 
     private func formattedLastSeen(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return "Last seen \(formatter.localizedString(for: date, relativeTo: Date()))"
+        DateFormatters.formatLastOnline(date)
     }
 
     private func statusIcon(for status: MessageStatus) -> some View {
