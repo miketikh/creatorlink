@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import FirebaseAuth
 import FirebaseFirestore
 
 @Observable
@@ -67,6 +68,34 @@ class UserService {
             .updateData([
                 "lastSeen": FieldValue.serverTimestamp()
             ])
+    }
+
+    func fetchAllUsers() async throws -> [UserProfile] {
+        let snapshot = try await firestoreService.usersCollection.getDocuments()
+
+        var users: [UserProfile] = []
+        for document in snapshot.documents {
+            let data = document.data()
+            let user = UserProfile(
+                id: document.documentID,
+                displayName: data["displayName"] as? String ?? "Unknown User",
+                email: data["email"] as? String ?? "",
+                photoURL: data["photoURL"] as? String,
+                isOnline: data["isOnline"] as? Bool ?? false,
+                lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date()
+            )
+            users.append(user)
+        }
+
+        return users
+    }
+
+    func fetchUser(userId: String) async throws -> UserProfile {
+        return try await fetchUserProfile(userId: userId)
+    }
+
+    var currentUserId: String? {
+        return AuthService.shared.currentUser?.uid
     }
 }
 
