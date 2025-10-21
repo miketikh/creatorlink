@@ -103,6 +103,10 @@ iOSInjectionProject/
 .env.production
 .env.*.local
 
+# Firebase configuration (contains sensitive API keys)
+GoogleService-Info.plist
+**/GoogleService-Info.plist
+
 # macOS
 .DS_Store
 .AppleDouble
