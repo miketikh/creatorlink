@@ -21,6 +21,8 @@ struct ChatDetailView: View {
     @State private var lastSeen: Date?
     @State private var presenceHandle: DatabaseHandle?
     @State private var scrollPosition: String? = nil
+    @State private var isNearBottom: Bool = true
+    @State private var scrollProxy: ScrollViewProxy? = nil
     @FocusState private var isInputFocused: Bool
 
     // Computed property to get the live conversation from ViewModel
@@ -135,6 +137,13 @@ struct ChatDetailView: View {
 
     private var messagesScrollView: some View {
         ScrollViewReader { proxy in
+            let _ = {
+                // Capture the proxy for use in scroll-to-bottom button
+                DispatchQueue.main.async {
+                    self.scrollProxy = proxy
+                }
+            }()
+
             ScrollView {
                 LazyVStack(spacing: 4) {
                     if viewModel.isLoading {
@@ -175,6 +184,20 @@ struct ChatDetailView: View {
                 .padding(.top, 8)
             }
             .coordinateSpace(name: "scrollView")
+            .onScrollGeometryChange(for: Bool.self) { geometry in
+                // Calculate if we're near the bottom (within 200 points)
+                let contentHeight = geometry.contentSize.height
+                let scrollOffset = geometry.contentOffset.y
+                let containerHeight = geometry.containerSize.height
+                let distanceFromBottom = contentHeight - (scrollOffset + containerHeight)
+
+                // Consider "near bottom" if within 200 points or if content fits in view
+                return distanceFromBottom < 200 || contentHeight <= containerHeight
+            } action: { oldValue, newValue in
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    isNearBottom = newValue
+                }
+            }
             .onPreferenceChange(VisibleMessagePreferenceKey.self) { messages in
                 // Find the message closest to the top (smallest positive minY)
                 if let topMessage = messages
@@ -196,6 +219,9 @@ struct ChatDetailView: View {
                 // Mark messages as read after initial load
                 await viewModel.markMessagesAsRead()
             }
+            .overlay(alignment: .bottomTrailing) {
+                scrollToBottomButton
+            }
         }
     }
 
@@ -216,6 +242,31 @@ struct ChatDetailView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var scrollToBottomButton: some View {
+        Group {
+            if !isNearBottom {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        if let lastMessage = viewModel.messages.last {
+                            scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Color.blue)
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                }
+                .padding(.trailing, 16)
+                .padding(.bottom, 16)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
     }
 
     private var messageInputArea: some View {
