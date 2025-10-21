@@ -7,6 +7,7 @@
 
 import Foundation
 import FirebaseFirestore
+import FirebaseDatabase
 import Observation
 
 @Observable
@@ -17,12 +18,18 @@ class ChatViewModel {
     var errorMessage: String?
     var isSending = false
     var conversation: Conversation?
+    var typingUserIds: [String] = []
+    var typingUserNames: [String] = []
+    var isViewActive = false  // Track if chat view is currently visible
 
     private let messageService = MessageService.shared
     private let conversationService = ConversationService.shared
     private let userService = UserService.shared
+    private let typingService = TypingService.shared
     private var messagesListener: ListenerRegistration?
     private var conversationListener: ListenerRegistration?
+    private var typingListener: DatabaseHandle?
+    private var typingDebounceTimer: Timer?
 
     let conversationId: String
     private var currentUserId: String?
@@ -38,43 +45,33 @@ class ChatViewModel {
 
     /// Loads messages for the conversation
     func loadMessages() async {
-        print("🔵 [ChatViewModel] loadMessages() started for conversationId: \(conversationId)")
-
         guard let userId = userService.currentUserId else {
-            print("❌ [ChatViewModel] No user logged in")
             errorMessage = "No user logged in"
             return
         }
 
-        print("✅ [ChatViewModel] Current user ID: \(userId)")
         currentUserId = userId
         isLoading = true
         errorMessage = nil
 
         do {
-            print("🔍 [ChatViewModel] Fetching conversation...")
             // Load conversation to get participantIds
             if let conversation = try await conversationService.fetchConversation(conversationId: conversationId) {
                 self.conversation = conversation
                 participantIds = conversation.participantIds
-                print("✅ [ChatViewModel] Conversation fetched. ParticipantIds: \(participantIds)")
             } else {
-                print("❌ [ChatViewModel] Conversation not found for ID: \(conversationId)")
                 throw ConversationError.invalidData
             }
 
-            print("💬 [ChatViewModel] Fetching messages...")
             messages = try await messageService.fetchMessages(conversationId: conversationId, userId: userId)
-            print("✅ [ChatViewModel] Fetched \(messages.count) messages")
             isLoading = false
 
             // Set up real-time listeners
-            print("👂 [ChatViewModel] Setting up real-time listeners...")
             setupMessageListener()
             setupConversationListener()
-            print("✅ [ChatViewModel] loadMessages() completed successfully")
+            setupTypingListener()
         } catch {
-            print("❌ [ChatViewModel] Error in loadMessages: \(error.localizedDescription)")
+            print("❌ [ChatViewModel] loadMessages error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
             isLoading = false
         }
@@ -82,27 +79,19 @@ class ChatViewModel {
 
     /// Sends a message with optimistic UI update
     func sendMessage(text: String) async {
-        print("📤 [ChatViewModel] sendMessage() started")
-
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            print("⚠️ [ChatViewModel] Empty message text, skipping send")
-            return
-        }
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         guard let currentUserId = currentUserId else {
-            print("❌ [ChatViewModel] No user logged in")
             errorMessage = "No user logged in"
             return
         }
 
         guard !participantIds.isEmpty else {
-            print("❌ [ChatViewModel] ParticipantIds is empty!")
             errorMessage = "Cannot send message: participant information not loaded"
             return
         }
 
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("✅ [ChatViewModel] Sending message: '\(trimmedText)' from \(currentUserId) to \(participantIds)")
 
         // Create temporary message for optimistic UI update
         let tempMessage = Message(
@@ -120,6 +109,7 @@ class ChatViewModel {
 
         // Add to messages array immediately (optimistic update)
         messages.append(tempMessage)
+        print("📤 [SEND] Optimistic: \(tempMessage.id?.prefix(8) ?? "?") status=\(tempMessage.status.rawValue)")
         isSending = true
 
         do {
@@ -131,20 +121,23 @@ class ChatViewModel {
                 participantIds: participantIds
             )
 
+            print("✅ [SEND] Confirmed: \(sentMessage.id?.prefix(8) ?? "?") status=\(sentMessage.status.rawValue)")
+
             // Replace temporary message with real message
             if let tempId = tempMessage.id,
                let index = messages.firstIndex(where: { $0.id == tempId }) {
                 messages[index] = sentMessage
             }
 
+            // Clear typing indicator when message is sent
+            typingService.clearTyping(conversationId: conversationId, userId: currentUserId)
+
             // Update conversation's last message
-            print("🔄 [ChatViewModel] Updating conversation lastMessage to: '\(trimmedText)'")
             try await conversationService.updateLastMessage(
                 conversationId: conversationId,
                 text: trimmedText,
                 timestamp: sentMessage.timestamp
             )
-            print("✅ [ChatViewModel] Conversation lastMessage updated successfully")
 
             isSending = false
         } catch {
@@ -154,6 +147,7 @@ class ChatViewModel {
                 messages.remove(at: index)
             }
 
+            print("❌ [SEND] Failed: \(error.localizedDescription)")
             errorMessage = "Failed to send message: \(error.localizedDescription)"
             isSending = false
         }
@@ -163,14 +157,23 @@ class ChatViewModel {
     func markMessagesAsRead() async {
         guard let currentUserId = currentUserId else { return }
 
+        // Filter for unread messages (not sent by current user and not in readBy map)
         let unreadMessages = messages.filter { message in
             message.senderId != currentUserId &&
             message.readBy[currentUserId] == nil
         }
 
-        for message in unreadMessages {
-            guard let messageId = message.id else { continue }
-            try? await messageService.markMessageAsRead(messageId: messageId, userId: currentUserId)
+        // Extract message IDs
+        let messageIds = unreadMessages.compactMap { $0.id }
+
+        guard !messageIds.isEmpty else { return }
+
+        do {
+            // Use batch update for efficiency
+            try await messageService.markMessagesAsRead(messageIds: messageIds, userId: currentUserId)
+        } catch {
+            print("❌ [ChatViewModel] Failed to mark as read: \(error.localizedDescription)")
+            // Don't throw - this is a non-critical operation that shouldn't block the UI
         }
     }
 
@@ -179,6 +182,32 @@ class ChatViewModel {
     /// Checks if a message is from the current user
     func isFromCurrentUser(_ message: Message) -> Bool {
         return message.senderId == currentUserId
+    }
+
+    /// Called when user is typing in the text field
+    /// - Parameter isTyping: Whether the user is currently typing
+    func handleTypingChange(isTyping: Bool) {
+        guard let currentUserId = currentUserId else { return }
+
+        // Cancel existing timer
+        typingDebounceTimer?.invalidate()
+
+        if isTyping {
+            // Debounce: wait 500ms before sending typing indicator
+            typingDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    self.typingService.setTyping(
+                        conversationId: self.conversationId,
+                        userId: currentUserId,
+                        isTyping: true
+                    )
+                }
+            }
+        } else {
+            // Clear typing immediately when user stops
+            typingService.clearTyping(conversationId: conversationId, userId: currentUserId)
+        }
     }
 
     // MARK: - Private Methods
@@ -192,7 +221,8 @@ class ChatViewModel {
         }
 
         messagesListener = messageService.listenToMessages(conversationId: conversationId, userId: userId) { [weak self] messages in
-            Task { @MainActor [weak self] in
+            // Use MainActor.assumeIsolated for @MainActor class (per ios_dev_notes.md)
+            MainActor.assumeIsolated {
                 guard let self = self else { return }
 
                 // Build a set of optimistic message identifiers (text + senderId + rough timestamp)
@@ -230,6 +260,16 @@ class ChatViewModel {
                 updatedMessages.sort { $0.timestamp < $1.timestamp }
 
                 self.messages = updatedMessages
+
+                // Log last 5 messages after update (enough to debug, won't eat context)
+                let last5 = updatedMessages.suffix(5)
+                for msg in last5 {
+                    let isMine = msg.senderId == userId ? "MINE" : "THEIRS"
+                    print("📨 [LISTENER] \(msg.id?.prefix(8) ?? "?") [\(isMine)] status=\(msg.status.rawValue)")
+                }
+
+                // NOTE: Auto-delivery is now handled by global listener in CreatorLinkApp.swift
+                // This prevents duplicate updates and ensures delivery marking works even when chat is not open
             }
         }
     }
@@ -237,17 +277,15 @@ class ChatViewModel {
     private func setupConversationListener() {
         conversationListener?.remove()
 
-        guard let userId = currentUserId else {
-            print("❌ [ChatViewModel] Cannot setup conversation listener: no current user ID")
-            return
-        }
+        guard let userId = currentUserId else { return }
 
         // Listen to this specific conversation for updates
         conversationListener = conversationService.db
             .collection("conversations")
             .document(conversationId)
             .addSnapshotListener { [weak self] snapshot, error in
-                Task { @MainActor [weak self] in
+                // Use MainActor.assumeIsolated for @MainActor class (per ios_dev_notes.md)
+                MainActor.assumeIsolated {
                     guard let self = self else { return }
 
                     if let error = error {
@@ -255,17 +293,36 @@ class ChatViewModel {
                         return
                     }
 
-                    guard let snapshot = snapshot, snapshot.exists else {
-                        print("❌ [ChatViewModel] Conversation document does not exist")
-                        return
-                    }
+                    guard let snapshot = snapshot, snapshot.exists else { return }
 
                     if let updatedConversation = try? snapshot.data(as: Conversation.self) {
-                        print("✅ [ChatViewModel] Conversation updated: \(updatedConversation.lastMessage)")
                         self.conversation = updatedConversation
                     }
                 }
             }
+    }
+
+    private func setupTypingListener() {
+        guard let userId = currentUserId else { return }
+
+        typingListener = typingService.listenToTyping(
+            conversationId: conversationId,
+            currentUserId: userId
+        ) { [weak self] typingUserIds in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.typingUserIds = typingUserIds
+
+                // Fetch user names for typing users
+                var names: [String] = []
+                for userId in typingUserIds {
+                    if let user = try? await self.userService.fetchUser(userId: userId) {
+                        names.append(user.displayName)
+                    }
+                }
+                self.typingUserNames = names
+            }
+        }
     }
 
     func cleanup() {
@@ -273,5 +330,18 @@ class ChatViewModel {
         messagesListener = nil
         conversationListener?.remove()
         conversationListener = nil
+
+        if let handle = typingListener {
+            typingService.removeTypingListener(conversationId: conversationId, handle: handle)
+            typingListener = nil
+        }
+
+        typingDebounceTimer?.invalidate()
+        typingDebounceTimer = nil
+
+        // Clear typing state when leaving chat
+        if let currentUserId = currentUserId {
+            typingService.clearTyping(conversationId: conversationId, userId: currentUserId)
+        }
     }
 }

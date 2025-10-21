@@ -7,6 +7,8 @@
 
 import SwiftUI
 import FirebaseCore
+import FirebaseAuth
+import FirebaseFirestore
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
@@ -24,16 +26,48 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct CreatorLinkApp: App {
     // Register app delegate for Firebase setup
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             ContentRootView()
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            handleScenePhaseChange(from: oldPhase, to: newPhase)
+        }
+    }
+
+    // MARK: - App Lifecycle Handling
+
+    private func handleScenePhaseChange(from oldPhase: ScenePhase, to newPhase: ScenePhase) {
+        guard let userId = AuthService.shared.currentUser?.uid else { return }
+
+        switch newPhase {
+        case .active:
+            print("🟢 [App] Scene became active")
+            // App entered foreground - set user online
+            PresenceService.shared.cancelOfflineTimer()
+            PresenceService.shared.setOnline(userId: userId)
+
+        case .inactive:
+            print("🟡 [App] Scene became inactive")
+            // App is temporarily inactive (e.g., receiving a phone call)
+            // Don't change presence yet
+
+        case .background:
+            print("🔴 [App] Scene entered background")
+            // App entered background - set user offline after 30 second grace period
+            PresenceService.shared.setOffline(userId: userId, delay: 30)
+
+        @unknown default:
+            break
         }
     }
 }
 
 struct ContentRootView: View {
     @State private var authService = AuthService.shared
+    @State private var messageDeliveryListener: ListenerRegistration?
 
     var body: some View {
         Group {
@@ -50,10 +84,81 @@ struct ContentRootView: View {
                             Label("Profile", systemImage: "person.fill")
                         }
                 }
+                .onAppear {
+                    // Setup presence when user is authenticated and app appears
+                    if let userId = authService.currentUser?.uid {
+                        PresenceService.shared.setupPresence(userId: userId)
+                        setupGlobalMessageDeliveryListener(userId: userId)
+                    }
+                }
+                .onDisappear {
+                    // Clean up global listener when app goes away
+                    messageDeliveryListener?.remove()
+                    messageDeliveryListener = nil
+                }
             } else {
                 // User is not signed in - show auth view
                 AuthView()
+                    .onAppear {
+                        // Clean up listener if user signs out
+                        messageDeliveryListener?.remove()
+                        messageDeliveryListener = nil
+                    }
             }
         }
+    }
+
+    // MARK: - Global Message Delivery Listener
+
+    /// Sets up a global listener that marks messages as "delivered" when they arrive
+    /// This runs app-wide, even when specific chat views aren't open
+    private func setupGlobalMessageDeliveryListener(userId: String) {
+        print("🌐 [App] Setting up global message delivery listener for user: \(userId)")
+
+        // Remove existing listener if any
+        messageDeliveryListener?.remove()
+
+        // Listen to all messages where current user is a participant
+        messageDeliveryListener = Firestore.firestore()
+            .collection("messages")
+            .whereField("participantIds", arrayContains: userId)
+            .addSnapshotListener { snapshot, error in
+                guard let snapshot = snapshot else {
+                    if let error = error {
+                        print("❌ [App] Global message listener error: \(error.localizedDescription)")
+                    }
+                    return
+                }
+
+                // Process new/modified messages
+                for change in snapshot.documentChanges {
+                    guard change.type == .added || change.type == .modified else { continue }
+
+                    do {
+                        let message = try change.document.data(as: Message.self)
+
+                        // Only mark as delivered if:
+                        // 1. Message is from someone else (not current user)
+                        // 2. Message status is currently "sent"
+                        // 3. Message hasn't been delivered yet
+                        guard message.senderId != userId,
+                              message.status == .sent,
+                              let messageId = message.id
+                        else { continue }
+
+                        // Mark as delivered in background
+                        Task {
+                            do {
+                                print("🌐 [App] Auto-marking message \(messageId.prefix(8)) as DELIVERED (global listener)")
+                                try await MessageService.shared.updateMessageStatus(messageId: messageId, status: .delivered)
+                            } catch {
+                                print("❌ [App] Failed to mark message as delivered: \(error.localizedDescription)")
+                            }
+                        }
+                    } catch {
+                        print("❌ [App] Failed to decode message: \(error.localizedDescription)")
+                    }
+                }
+            }
     }
 }

@@ -19,7 +19,7 @@ class ConversationsViewModel {
     private let conversationService = ConversationService.shared
     private let userService = UserService.shared
     private var conversationsListener: ListenerRegistration?
-    private var currentUserId: String?
+    var currentUserId: String?
 
     // MARK: - Initialization
 
@@ -106,6 +106,40 @@ class ConversationsViewModel {
         }
 
         return try? await userService.fetchUser(userId: otherUserId)
+    }
+
+    /// Gets unread message count for a conversation
+    func getUnreadCount(for conversation: Conversation) async -> Int {
+        guard let conversationId = conversation.id,
+              let currentUserId = currentUserId else {
+            return 0
+        }
+
+        do {
+            // Query messages where current user is NOT in readBy map
+            let snapshot = try await FirestoreService.shared.messagesCollection
+                .whereField("conversationId", isEqualTo: conversationId)
+                .whereField("participantIds", arrayContains: currentUserId)
+                .getDocuments()
+
+            var unreadCount = 0
+            for document in snapshot.documents {
+                let data = document.data()
+
+                // Check if message is from another user and not in readBy
+                let senderId = data["senderId"] as? String ?? ""
+                let readBy = data["readBy"] as? [String: Any] ?? [:]
+
+                if senderId != currentUserId && readBy[currentUserId] == nil {
+                    unreadCount += 1
+                }
+            }
+
+            return unreadCount
+        } catch {
+            print("❌ [ConversationsViewModel] Failed to get unread count: \(error.localizedDescription)")
+            return 0
+        }
     }
 
     // MARK: - Private Methods

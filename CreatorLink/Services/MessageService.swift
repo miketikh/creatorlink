@@ -70,38 +70,26 @@ class MessageService {
     ///   - userId: The ID of the current user (required for security rules)
     /// - Returns: Array of messages sorted by timestamp (ascending)
     func fetchMessages(conversationId: String, userId: String) async throws -> [Message] {
-        print("💬 [MessageService] Fetching messages for conversation: \(conversationId), user: \(userId)")
-
         do {
-            print("🔍 [MessageService] Executing Firestore query with participantIds filter...")
             let snapshot = try await messagesCollection
                 .whereField("conversationId", isEqualTo: conversationId)
                 .whereField("participantIds", arrayContains: userId)
                 .order(by: "timestamp", descending: false)
                 .getDocuments()
 
-            print("📊 [MessageService] Query returned \(snapshot.documents.count) documents")
-
             var messages: [Message] = []
-            for (index, document) in snapshot.documents.enumerated() {
-                print("📄 [MessageService] Processing document \(index + 1)/\(snapshot.documents.count): \(document.documentID)")
-                print("📄 [MessageService] Document data: \(document.data())")
-
+            for document in snapshot.documents {
                 do {
                     let message = try document.data(as: Message.self)
                     messages.append(message)
-                    print("✅ [MessageService] Successfully decoded message ID: \(message.id ?? "nil"), participantIds: \(message.participantIds)")
                 } catch {
-                    print("❌ [MessageService] Failed to decode message from document: \(document.documentID)")
-                    print("❌ [MessageService] Decoding error: \(error)")
+                    print("❌ [MessageService] Failed to decode message: \(document.documentID)")
                 }
             }
 
-            print("📈 [MessageService] Successfully fetched \(messages.count) messages")
             return messages
         } catch {
             print("❌ [MessageService] Error fetching messages: \(error.localizedDescription)")
-            print("❌ [MessageService] Full error: \(error)")
             throw MessageError.fetchFailed(error)
         }
     }
@@ -115,14 +103,13 @@ class MessageService {
     ///   - completion: Closure called with updated messages array
     /// - Returns: ListenerRegistration for cleanup
     func listenToMessages(conversationId: String, userId: String, completion: @escaping ([Message]) -> Void) -> ListenerRegistration {
-        print("👂 [MessageService] Setting up message listener for conversation: \(conversationId), user: \(userId)")
         return messagesCollection
             .whereField("conversationId", isEqualTo: conversationId)
             .whereField("participantIds", arrayContains: userId)
             .order(by: "timestamp", descending: false)
             .addSnapshotListener { snapshot, error in
                 guard let snapshot = snapshot else {
-                    print("Error listening to messages: \(error?.localizedDescription ?? "Unknown error")")
+                    print("❌ [MessageService] Listener error: \(error?.localizedDescription ?? "Unknown")")
                     return
                 }
 
@@ -144,11 +131,13 @@ class MessageService {
     ///   - messageId: The ID of the message to update
     ///   - status: The new status
     func updateMessageStatus(messageId: String, status: MessageStatus) async throws {
+        print("📝 [STATUS] Updating \(messageId.prefix(8)) → \(status.rawValue)")
         do {
             try await messagesCollection.document(messageId).updateData([
                 "status": status.rawValue
             ])
         } catch {
+            print("❌ [STATUS] Update failed: \(error.localizedDescription)")
             throw MessageError.updateFailed(error)
         }
     }
@@ -162,10 +151,39 @@ class MessageService {
     func markMessageAsRead(messageId: String, userId: String) async throws {
         do {
             try await messagesCollection.document(messageId).updateData([
-                "readBy.\(userId)": Timestamp(date: Date()),
+                "readBy.\(userId)": FieldValue.serverTimestamp(),
                 "status": MessageStatus.read.rawValue
             ])
         } catch {
+            throw MessageError.updateFailed(error)
+        }
+    }
+
+    /// Batch marks multiple messages as read by a user
+    /// - Parameters:
+    ///   - messageIds: Array of message IDs to mark as read
+    ///   - userId: The ID of the user who read the messages
+    func markMessagesAsRead(messageIds: [String], userId: String) async throws {
+        guard !messageIds.isEmpty else { return }
+
+        print("📖 [STATUS] Marking \(messageIds.count) messages as READ")
+
+        do {
+            let batch = db.batch()
+
+            for messageId in messageIds {
+                let messageRef = messagesCollection.document(messageId)
+                let updateData: [String: Any] = [
+                    "readBy.\(userId)": FieldValue.serverTimestamp(),
+                    "status": MessageStatus.read.rawValue
+                ]
+                batch.updateData(updateData, forDocument: messageRef)
+            }
+
+            try await batch.commit()
+            print("✅ [STATUS] Marked \(messageIds.count) as READ")
+        } catch {
+            print("❌ [STATUS] Mark as read failed: \(error.localizedDescription)")
             throw MessageError.updateFailed(error)
         }
     }

@@ -10,6 +10,7 @@ import SwiftUI
 struct MessageBubbleView: View {
     let message: Message
     let isFromCurrentUser: Bool
+    var showTimestamp: Bool = true
 
     var body: some View {
         HStack {
@@ -27,14 +28,16 @@ struct MessageBubbleView: View {
                     .cornerRadius(18)
                     .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: bubbleAlignment)
 
-                // Timestamp and status
-                HStack(spacing: 4) {
-                    Text(formattedTimestamp)
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
+                // Timestamp and status (only show if showTimestamp is true)
+                if showTimestamp {
+                    HStack(spacing: 4) {
+                        Text(formattedTimestamp)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
 
-                    if isFromCurrentUser {
-                        statusIcon
+                        if isFromCurrentUser {
+                            statusIcon
+                        }
                     }
                 }
             }
@@ -66,24 +69,52 @@ struct MessageBubbleView: View {
     }
 
     private var statusIcon: some View {
-        Group {
-            switch message.status {
-            case .sending:
-                Image(systemName: "clock")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            case .sent:
-                Image(systemName: "checkmark")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            case .delivered:
-                Image(systemName: "checkmark.circle")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            case .read:
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.caption2)
-                    .foregroundColor(.blue)
+        HStack(spacing: 4) {
+            // DEBUG: Show status text
+            Text(message.status.rawValue)
+                .font(.caption2)
+                .foregroundColor(.red)
+
+            Group {
+                switch message.status {
+                case .sending:
+                    // Clock icon for messages being sent
+                    Image(systemName: "clock")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                case .sent:
+                    // Single checkmark (gray) for sent messages
+                    Image(systemName: "checkmark")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+
+                case .delivered:
+                    // Double checkmark (gray) - two overlapping single checkmarks
+                    ZStack {
+                        Image(systemName: "checkmark")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .offset(x: -2)
+                        Image(systemName: "checkmark")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .offset(x: 2)
+                    }
+
+                case .read:
+                    // Double checkmark (blue) - two overlapping single checkmarks
+                    ZStack {
+                        Image(systemName: "checkmark")
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                            .offset(x: -2)
+                        Image(systemName: "checkmark")
+                            .font(.caption2)
+                            .foregroundColor(.blue)
+                            .offset(x: 2)
+                    }
+                }
             }
         }
     }

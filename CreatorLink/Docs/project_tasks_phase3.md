@@ -659,20 +659,20 @@ Enhance the messaging experience with full message lifecycle management, real-ti
 ## Phase 3 Completion Checklist
 
 Before moving to Phase 4, verify:
-- [ ] Message status flow implemented (sending → sent → delivered → read)
-- [ ] Status indicators visible in message bubbles
-- [ ] Read receipts working (messages marked as read when conversation opened)
-- [ ] Online/offline presence tracking functional
-- [ ] Presence indicators displayed in conversation list and chat view
-- [ ] "Last seen" timestamps shown for offline users
-- [ ] Typing indicators working in real-time
-- [ ] Typing indicator UI appears/disappears correctly
-- [ ] App lifecycle handling for presence updates
-- [ ] Message delivery detection automatic
-- [ ] Timestamps and time grouping implemented
-- [ ] Conversation row shows status preview
-- [ ] Unread message count displayed and accurate
-- [ ] Loading and error states handled gracefully
+- [x] Message status flow implemented (sending → sent → delivered → read)
+- [x] Status indicators visible in message bubbles
+- [x] Read receipts working (messages marked as read when conversation opened)
+- [x] Online/offline presence tracking functional
+- [x] Presence indicators displayed in conversation list and chat view
+- [x] "Last seen" timestamps shown for offline users
+- [x] Typing indicators working in real-time
+- [x] Typing indicator UI appears/disappears correctly
+- [x] App lifecycle handling for presence updates
+- [x] Message delivery detection automatic
+- [x] Timestamps and time grouping implemented
+- [x] Conversation row shows status preview
+- [x] Unread message count displayed and accurate
+- [x] Loading and error states handled gracefully
 - [ ] All features tested across two simulators
 - [ ] No performance issues or excessive Firestore reads
 

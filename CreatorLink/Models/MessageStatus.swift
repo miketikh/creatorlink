@@ -7,7 +7,7 @@
 
 import Foundation
 
-enum MessageStatus: String, Codable {
+enum MessageStatus: String, Codable, Hashable {
     case sending    // Message is being sent
     case sent       // Message sent to server
     case delivered  // Message delivered to recipient
