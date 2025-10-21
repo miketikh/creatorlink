@@ -11,6 +11,7 @@ struct ChatsView: View {
     @State private var viewModel = ConversationsViewModel()
     @State private var showingNewConversation = false
     @State private var selectedConversation: Conversation?
+    @State private var scrollPositions: [String: String] = [:] // conversationId -> messageId
 
     var body: some View {
         NavigationStack {
@@ -40,7 +41,17 @@ struct ChatsView: View {
                 })
             }
             .navigationDestination(item: $selectedConversation) { conversation in
-                ChatDetailView(conversation: conversation)
+                ChatDetailView(
+                    conversation: conversation,
+                    savedScrollPosition: scrollPositions[conversation.id ?? ""],
+                    onScrollPositionChanged: { messageId in
+                        if let conversationId = conversation.id {
+                            print("💾 [ChatsView] Saving scroll position for conversation \(conversationId): \(messageId ?? "nil")")
+                            scrollPositions[conversationId] = messageId
+                            print("💾 [ChatsView] Scroll positions dictionary now has \(scrollPositions.count) entries")
+                        }
+                    }
+                )
             }
             .task {
                 await viewModel.loadConversations()
@@ -99,7 +110,9 @@ struct ChatsView: View {
         }
 
         return List(viewModel.conversations) { conversation in
-            NavigationLink(destination: ChatDetailView(conversation: conversation)) {
+            Button {
+                selectedConversation = conversation
+            } label: {
                 ConversationRowView(conversation: conversation, viewModel: viewModel)
             }
         }

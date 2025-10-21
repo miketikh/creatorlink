@@ -11,6 +11,8 @@ import FirebaseDatabase
 
 struct ChatDetailView: View {
     let initialConversation: Conversation
+    let savedScrollPosition: String?
+    let onScrollPositionChanged: (String?) -> Void
 
     @State private var viewModel: ChatViewModel
     @State private var messageText = ""
@@ -18,6 +20,7 @@ struct ChatDetailView: View {
     @State private var isOnline = false
     @State private var lastSeen: Date?
     @State private var presenceHandle: DatabaseHandle?
+    @State private var scrollPosition: String? = nil
     @FocusState private var isInputFocused: Bool
 
     // Computed property to get the live conversation from ViewModel
@@ -25,21 +28,28 @@ struct ChatDetailView: View {
         viewModel.conversation ?? initialConversation
     }
 
-    init(conversation: Conversation) {
+    init(conversation: Conversation, savedScrollPosition: String? = nil, onScrollPositionChanged: @escaping (String?) -> Void = { _ in }) {
         print("🔵 [ChatDetailView] Initializing with conversation ID: \(conversation.id ?? "nil")")
         print("🔵 [ChatDetailView] Conversation participantIds: \(conversation.participantIds)")
+        print("🔵 [ChatDetailView] Saved scroll position: \(savedScrollPosition ?? "none")")
 
         // Ensure conversation has a valid ID
         guard let conversationId = conversation.id, !conversationId.isEmpty else {
             print("❌ [ChatDetailView] CRITICAL: Conversation ID is nil or empty! This will cause a crash.")
             print("❌ [ChatDetailView] Creating ViewModel with fallback empty string, but this needs investigation")
             self.initialConversation = conversation
+            self.savedScrollPosition = savedScrollPosition
+            self.onScrollPositionChanged = onScrollPositionChanged
             _viewModel = State(initialValue: ChatViewModel(conversationId: ""))
+            _scrollPosition = State(initialValue: savedScrollPosition)
             return
         }
 
         self.initialConversation = conversation
+        self.savedScrollPosition = savedScrollPosition
+        self.onScrollPositionChanged = onScrollPositionChanged
         _viewModel = State(initialValue: ChatViewModel(conversationId: conversationId))
+        _scrollPosition = State(initialValue: savedScrollPosition)
     }
 
     var body: some View {
@@ -95,12 +105,6 @@ struct ChatDetailView: View {
                 }
             }
         }
-        .task {
-            print("🔵 [ChatDetailView] .task triggered - loading data")
-            await loadData()
-            // Mark messages as read after initial load
-            await viewModel.markMessagesAsRead()
-        }
         .onAppear {
             print("🔵 [ChatDetailView] onAppear - view appeared")
             // Set view as active to prevent auto-delivery race condition
@@ -112,6 +116,10 @@ struct ChatDetailView: View {
         }
         .onDisappear {
             print("🔵 [ChatDetailView] onDisappear - view disappeared, navigating back")
+            // Save scroll position before leaving
+            print("📜 [ChatDetailView] Saving scroll position: \(scrollPosition ?? "nil")")
+            onScrollPositionChanged(scrollPosition)
+
             // Set view as inactive so auto-delivery can run for background messages
             viewModel.isViewActive = false
             viewModel.cleanup()
@@ -156,25 +164,49 @@ struct ChatDetailView: View {
                                     isFromCurrentUser: viewModel.isFromCurrentUser(message),
                                     showTimestamp: shouldShowTimestamp(at: index)
                                 )
-                                .id(message.id)
                             }
+                            .id(message.id)
+                            .background(
+                                GeometryReader { geometry in
+                                    Color.clear.preference(
+                                        key: VisibleMessagePreferenceKey.self,
+                                        value: [VisibleMessage(
+                                            id: message.id ?? "",
+                                            minY: geometry.frame(in: .named("scrollView")).minY
+                                        )]
+                                    )
+                                }
+                            )
                         }
                     }
                 }
                 .padding(.horizontal)
                 .padding(.top, 8)
             }
-            .onChange(of: viewModel.messages.count) { oldCount, newCount in
-                if newCount > oldCount, let lastMessage = viewModel.messages.last {
-                    withAnimation {
-                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                    }
+            .coordinateSpace(name: "scrollView")
+            .onPreferenceChange(VisibleMessagePreferenceKey.self) { messages in
+                // Find the message closest to the top (smallest positive minY)
+                if let topMessage = messages
+                    .filter({ $0.minY >= 0 && $0.minY < 200 })
+                    .min(by: { $0.minY < $1.minY }) {
+                    scrollPosition = topMessage.id
                 }
             }
-            .onAppear {
-                if let lastMessage = viewModel.messages.last {
+            .task {
+                print("🔵 [ChatDetailView] .task triggered - loading data")
+                await loadData()
+
+                // Scroll to saved position or bottom AFTER messages load
+                if let savedPos = savedScrollPosition {
+                    print("📜 [ChatDetailView] Restoring saved scroll position: \(savedPos)")
+                    proxy.scrollTo(savedPos, anchor: .top)
+                } else if let lastMessage = viewModel.messages.last {
+                    print("📜 [ChatDetailView] No saved position, scrolling to bottom: \(lastMessage.id ?? "nil")")
                     proxy.scrollTo(lastMessage.id, anchor: .bottom)
                 }
+
+                // Mark messages as read after initial load
+                await viewModel.markMessagesAsRead()
             }
         }
     }
@@ -321,6 +353,20 @@ struct ChatDetailView: View {
 
         // Optionally refocus the input field
         isInputFocused = true
+    }
+}
+
+// Preference key for tracking visible messages
+struct VisibleMessage: Equatable {
+    let id: String
+    let minY: CGFloat
+}
+
+struct VisibleMessagePreferenceKey: PreferenceKey {
+    static var defaultValue: [VisibleMessage] = []
+
+    static func reduce(value: inout [VisibleMessage], nextValue: () -> [VisibleMessage]) {
+        value.append(contentsOf: nextValue())
     }
 }
 
