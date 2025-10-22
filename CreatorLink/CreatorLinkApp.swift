@@ -158,32 +158,65 @@ struct ContentRootView: View {
                     return
                 }
 
-                // Process new/modified messages
+                // Process new messages (only .added to avoid duplicate notifications)
                 for change in snapshot.documentChanges {
-                    guard change.type == .added || change.type == .modified else { continue }
+                    guard change.type == .added else { continue }
 
                     do {
                         let message = try change.document.data(as: Message.self)
 
-                        // Only mark as delivered if:
-                        // 1. Message is from someone else (not current user)
-                        // 2. Message status is currently "sent"
-                        // 3. Message hasn't been delivered yet
+                        // Only process messages from others (not current user)
                         guard message.senderId != userId,
                               message.status == .sent,
                               let messageId = message.id
                         else { continue }
 
-                        // Mark as delivered in background
+                        // Mark as delivered and trigger notification in background
                         Task {
                             do {
                                 try await MessageService.shared.updateMessageStatus(messageId: messageId, status: .delivered)
+                                // Trigger notification after successful delivery update
+                                await self.triggerNotificationForMessage(message, userId: userId)
                             } catch {
+                                print("[MessageListener] Error processing message: \(error.localizedDescription)")
                             }
                         }
                     } catch {
+                        print("[MessageListener] Error decoding message: \(error.localizedDescription)")
                     }
                 }
             }
+    }
+
+    // MARK: - Notification Triggering
+
+    /// Trigger a local notification for an incoming message
+    /// - Parameters:
+    ///   - message: The message that was received
+    ///   - userId: The current user's ID
+    private func triggerNotificationForMessage(_ message: Message, userId: String) async {
+        do {
+            // TODO: Check if user is actively viewing this conversation (Phase 5)
+
+            // Fetch sender information
+            let sender = try await UserService.shared.fetchUser(userId: message.senderId)
+            let senderName = sender.displayName ?? "Someone"
+
+            // Fetch conversation to determine if it's a group chat
+            let conversation = try await ConversationService.shared.fetchConversation(conversationId: message.conversationId)
+            let isGroupChat = conversation?.isGroupChat ?? false
+
+            // Trigger the notification
+            NotificationManager.shared.showMessageNotification(
+                conversationId: message.conversationId,
+                senderName: senderName,
+                messageText: message.text,
+                isGroupChat: isGroupChat
+            )
+
+            print("[Notification] Triggered notification for message from \(senderName)")
+        } catch {
+            print("[Notification] Failed to trigger notification: \(error.localizedDescription)")
+        }
     }
 }

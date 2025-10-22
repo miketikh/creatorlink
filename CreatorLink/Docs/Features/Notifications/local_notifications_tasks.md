@@ -155,23 +155,23 @@ This phase integrates notification triggers into the existing message delivery l
 **Goal:** Add method to NotificationManager that creates and schedules local notifications for incoming messages.
 
 **Tasks:**
-- [ ] Open `CreatorLink/Services/NotificationManager.swift`
-- [ ] Add new method `showMessageNotification(conversationId:senderName:messageText:isGroupChat:)`
-- [ ] Create `UNMutableNotificationContent` object
+- [x] Open `CreatorLink/Services/NotificationManager.swift`
+- [x] Add new method `showMessageNotification(conversationId:senderName:messageText:isGroupChat:)`
+- [x] Create `UNMutableNotificationContent` object
   - Set `content.title` to sender name
   - Set `content.body` to message text
   - Set `content.sound` to `.default`
-- [ ] Implement badge increment logic
+- [x] Implement badge increment logic
   - Get current badge: `UIApplication.shared.applicationIconBadgeNumber`
   - Set `content.badge` to current badge + 1 (wrapped in NSNumber)
-- [ ] Add custom data for deep linking
+- [x] Add custom data for deep linking
   - Set `content.userInfo` dictionary with `conversationId` and `isGroupChat`
-- [ ] Create notification trigger
+- [x] Create notification trigger
   - Use `UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)` for immediate delivery
-- [ ] Create notification request
+- [x] Create notification request
   - Use `UUID().uuidString` as unique identifier
   - Combine content and trigger
-- [ ] Schedule notification
+- [x] Schedule notification
   - Call `UNUserNotificationCenter.current().add(request)`
   - Handle errors in completion handler
 
@@ -199,21 +199,21 @@ This phase integrates notification triggers into the existing message delivery l
 **Goal:** Modify the existing global message delivery listener to trigger local notifications when new messages arrive from other users.
 
 **Tasks:**
-- [ ] Open `CreatorLink/CreatorLinkApp.swift`
-- [ ] Locate `setupGlobalMessageDeliveryListener(userId:)` method in ContentRootView
-- [ ] Modify the snapshot listener to only trigger notifications for `.added` messages
+- [x] Open `CreatorLink/CreatorLinkApp.swift`
+- [x] Locate `setupGlobalMessageDeliveryListener(userId:)` method in ContentRootView
+- [x] Modify the snapshot listener to only trigger notifications for `.added` messages
   - Change `guard change.type == .added || change.type == .modified` to only `.added`
   - This prevents notifications for message status updates
-- [ ] After `updateMessageStatus` call in the Task block, add notification trigger
+- [x] After `updateMessageStatus` call in the Task block, add notification trigger
   - Call new helper method: `await self.triggerNotificationForMessage(message, userId: userId)`
-- [ ] Create new private method `triggerNotificationForMessage(_ message: Message, userId: String) async`
+- [x] Create new private method `triggerNotificationForMessage(_ message: Message, userId: String) async`
   - Fetch sender info using `UserService.shared.fetchUser(userId: message.senderId)`
   - Extract sender's display name (fallback to "Someone" if nil)
   - Fetch conversation using `ConversationService.shared.fetchConversation(conversationId: message.conversationId)`
   - Determine if group chat from conversation
   - Call `NotificationManager.shared.showMessageNotification` with all parameters
   - Wrap in do-catch and print errors
-- [ ] Add TODO comment for Phase 5: "Check if user is actively viewing this conversation"
+- [x] Add TODO comment for Phase 5: "Check if user is actively viewing this conversation"
 
 **What to Test:**
 1. Open app on Device A or Simulator 1

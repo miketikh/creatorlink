@@ -7,6 +7,7 @@
 
 import Foundation
 import UserNotifications
+import UIKit
 
 @Observable
 class NotificationManager {
@@ -38,5 +39,50 @@ class NotificationManager {
     func checkPermissionStatus() async -> UNAuthorizationStatus {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         return settings.authorizationStatus
+    }
+
+    // MARK: - Notification Creation
+
+    /// Show a local notification for an incoming message
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation where the message was received
+    ///   - senderName: The display name of the message sender
+    ///   - messageText: The text content of the message
+    ///   - isGroupChat: Whether this is a group conversation
+    func showMessageNotification(conversationId: String, senderName: String, messageText: String, isGroupChat: Bool) {
+        // Create notification content
+        let content = UNMutableNotificationContent()
+        content.title = senderName
+        content.body = messageText
+        content.sound = .default
+
+        // Increment badge count
+        let currentBadge = UIApplication.shared.applicationIconBadgeNumber
+        content.badge = NSNumber(value: currentBadge + 1)
+
+        // Add custom data for deep linking
+        content.userInfo = [
+            "conversationId": conversationId,
+            "isGroupChat": isGroupChat
+        ]
+
+        // Create trigger for immediate delivery
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+
+        // Create notification request with unique identifier
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: trigger
+        )
+
+        // Schedule the notification
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error = error {
+                print("[NotificationManager] Failed to schedule notification: \(error.localizedDescription)")
+            } else {
+                print("[NotificationManager] Notification scheduled successfully for conversation: \(conversationId)")
+            }
+        }
     }
 }
