@@ -80,6 +80,24 @@ struct ParticipantRowView: View {
         }
         .padding(.vertical, 8)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityHint("Double tap to view options")
+    }
+
+    private var accessibilityLabel: String {
+        var label = participant.displayName
+        if isCurrentUser {
+            label += ", You"
+        }
+        if showOnlineStatus {
+            if participant.isOnline {
+                label += ", Online"
+            } else {
+                label += ", \(formattedLastSeen(participant.lastSeen))"
+            }
+        }
+        return label
     }
 
     // MARK: - Helper Methods

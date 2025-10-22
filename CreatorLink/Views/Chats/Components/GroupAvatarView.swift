@@ -14,6 +14,7 @@ struct GroupAvatarView: View {
     let groupImageUrl: String?
     let participantIds: [String]
     let size: CGFloat
+    var groupNameForAccessibility: String?
 
     @State private var participantPhotos: [String] = []
     @State private var groupName: String?
@@ -31,8 +32,17 @@ struct GroupAvatarView: View {
                 placeholderView
             }
         }
+        .accessibilityLabel(accessibilityLabel)
         .task {
             await fetchParticipantPhotos()
+        }
+    }
+
+    private var accessibilityLabel: String {
+        if let name = groupNameForAccessibility {
+            return "Group avatar for \(name), \(participantIds.count) members"
+        } else {
+            return "Group avatar, \(participantIds.count) members"
         }
     }
 

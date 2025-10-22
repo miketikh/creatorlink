@@ -69,6 +69,8 @@ struct TypingIndicatorView: View {
                     .blur(radius: 0.5)
             )
             .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(displayText)
             .onAppear {
                 startAnimation()
             }

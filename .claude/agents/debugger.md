@@ -208,6 +208,9 @@ Provide a clear, concise report:
 3. Check conditional logic and early returns
 4. Verify data transformation at each step
 
+## Everything appears to work, but action not processed
+1. Note that it may be a firestore or storage related issue, use MCP tools to investigate if available, if not identify as a potential cause after trying others
+
 ## Example Investigation
 
 **Issue:** "Messages not appearing in chat view"

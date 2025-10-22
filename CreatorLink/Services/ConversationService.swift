@@ -4,6 +4,18 @@
 //
 //  Service layer for conversation-related Firebase operations
 //
+//  This service handles all conversation management including:
+//  - Creating and fetching conversations (both one-on-one and group)
+//  - Managing group participants (adding/removing members)
+//  - Updating group metadata (name, image, mute settings)
+//  - Real-time conversation listeners
+//
+//  Key Architecture Decisions:
+//  - Uses atomic Firestore operations (arrayUnion/arrayRemove) for concurrent safety
+//  - Denormalizes unread counts for performance optimization
+//  - Last person leaving a group triggers conversation deletion
+//  - System messages are created for member join/leave events
+//
 
 import Foundation
 import FirebaseFirestore
@@ -278,18 +290,14 @@ class ConversationService {
 
             // Check if userId is already in participantIds
             guard !conversation.participantIds.contains(userId) else {
-                // User already in group, no action needed
+                // User already in group, no action needed (handles concurrent add operations)
                 return
             }
 
-            // Append to participantIds array
-            var updatedParticipantIds = conversation.participantIds
-            updatedParticipantIds.append(userId)
-
-            // Update Firestore document with new participantIds
-            // Also initialize unread count to 0 for the new participant
+            // Use FieldValue.arrayUnion for atomic concurrent-safe operation
+            // This ensures if two admins add the same user simultaneously, it only gets added once
             try await docRef.updateData([
-                "participantIds": updatedParticipantIds.sorted(),
+                "participantIds": FieldValue.arrayUnion([userId]),
                 "unreadCounts.\(userId)": 0
             ])
 
@@ -328,14 +336,16 @@ class ConversationService {
                 throw ConversationError.unauthorized
             }
 
-            // Remove userId from participantIds array
-            var updatedParticipantIds = conversation.participantIds
-            updatedParticipantIds.removeAll { $0 == userId }
+            // Check if user is still in the group (handles concurrent removal or user already left)
+            guard conversation.participantIds.contains(userId) else {
+                // User already removed, no action needed
+                return
+            }
 
-            // Update Firestore document
-            // Also remove the unread count for the removed participant
+            // Use FieldValue.arrayRemove for atomic concurrent-safe operation
+            // This ensures if two operations try to remove the same user, it's handled safely
             try await docRef.updateData([
-                "participantIds": updatedParticipantIds.sorted(),
+                "participantIds": FieldValue.arrayRemove([userId]),
                 "unreadCounts.\(userId)": FieldValue.delete()
             ])
 
@@ -363,21 +373,26 @@ class ConversationService {
                 throw ConversationError.invalidData
             }
 
-            // Remove userId from participantIds
-            var updatedParticipantIds = conversation.participantIds
-            updatedParticipantIds.removeAll { $0 == userId }
+            // Check if user is still in the group
+            guard conversation.participantIds.contains(userId) else {
+                // User already left, no action needed
+                return
+            }
 
-            // If participantIds becomes empty, delete conversation
-            if updatedParticipantIds.isEmpty {
+            // Determine if this is the last participant
+            let remainingParticipantCount = conversation.participantIds.count - 1
+
+            // If this is the last person, delete conversation
+            if remainingParticipantCount == 0 {
                 try await deleteConversation(conversationId: conversationId)
             } else {
                 // Create system message before updating
                 try await createSystemMessage(conversationId: conversationId, text: "left the group", senderId: userId)
 
-                // Update Firestore document
+                // Update Firestore document using atomic operation
                 // Also remove the unread count for the leaving user
                 try await docRef.updateData([
-                    "participantIds": updatedParticipantIds.sorted(),
+                    "participantIds": FieldValue.arrayRemove([userId]),
                     "unreadCounts.\(userId)": FieldValue.delete()
                 ])
             }

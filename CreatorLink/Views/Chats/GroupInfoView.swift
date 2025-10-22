@@ -10,6 +10,8 @@ import FirebaseFirestore
 
 struct GroupInfoView: View {
     let initialConversation: Conversation
+    @Binding var userLeftGroup: Bool
+    let onDismiss: () -> Void
 
     @State private var viewModel: GroupInfoViewModel
     @State private var isEditingName = false
@@ -23,10 +25,11 @@ struct GroupInfoView: View {
     @State private var showAddParticipants = false
     @State private var participantToRemove: UserProfile?
     @State private var showRemoveConfirmation = false
-    @Environment(\.dismiss) var dismiss
 
-    init(conversation: Conversation) {
+    init(conversation: Conversation, userLeftGroup: Binding<Bool>, onDismiss: @escaping () -> Void) {
         self.initialConversation = conversation
+        self._userLeftGroup = userLeftGroup
+        self.onDismiss = onDismiss
         _conversation = State(initialValue: conversation)
         _viewModel = State(initialValue: GroupInfoViewModel(conversation: conversation))
     }
@@ -53,9 +56,32 @@ struct GroupInfoView: View {
         }
         .navigationTitle("Group Info")
         .navigationBarTitleDisplayMode(.inline)
+        .overlay {
+            if viewModel.isLoading {
+                ZStack {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .scaleEffect(1.2)
+                        Text("Saving...")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(24)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(12)
+                    .shadow(radius: 10)
+                }
+            }
+        }
         .task {
             await viewModel.loadParticipants()
             setupConversationListener()
+
+            // Track analytics
+            AnalyticsService.shared.trackGroupInfoViewed(groupSize: conversation.participantIds.count)
         }
         .onDisappear {
             conversationListener?.remove()
@@ -68,6 +94,8 @@ struct GroupInfoView: View {
         } message: {
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
+            } else {
+                Text("An unexpected error occurred. Please try again.")
             }
         }
         .alert("Leave Group", isPresented: $showLeaveConfirmation) {
@@ -263,10 +291,19 @@ struct GroupInfoView: View {
                 .foregroundColor(.secondary)
                 .fontWeight(.semibold)
 
-            if viewModel.isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity)
-                    .padding()
+            if viewModel.isLoading && viewModel.participants.isEmpty {
+                // Skeleton loading state
+                VStack(spacing: 0) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        ParticipantSkeletonRow()
+                    }
+                }
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(.systemGray4), lineWidth: 0.5)
+                )
             } else {
                 VStack(spacing: 0) {
                     ForEach(viewModel.participants) { participant in
@@ -412,11 +449,17 @@ struct GroupInfoView: View {
 
     private func leaveGroupTapped() async {
         guard let conversationId = conversation.id,
-              let userId = UserService.shared.currentUserId else { return }
+              let userId = UserService.shared.currentUserId else {
+            return
+        }
 
         do {
             try await viewModel.leaveGroup(conversationId: conversationId, userId: userId)
-            dismiss()
+
+            // Set the binding to trigger navigation back to conversations list
+            userLeftGroup = true
+
+            onDismiss()
         } catch {
             // Error is shown via viewModel.errorMessage
         }
@@ -453,13 +496,18 @@ struct GroupInfoView: View {
                 userId: userId,
                 isMuted: isMuted
             )
+
+            // Track analytics
+            AnalyticsService.shared.trackGroupNotificationsMuted(isMuted: isMuted)
         } catch {
             viewModel.errorMessage = "Failed to update notification settings"
         }
     }
 
     private func setupConversationListener() {
-        guard let conversationId = conversation.id else { return }
+        guard let conversationId = conversation.id else {
+            return
+        }
 
         // Listen to this specific conversation for updates
         conversationListener = ConversationService.shared.db
@@ -468,14 +516,36 @@ struct GroupInfoView: View {
             .addSnapshotListener { [self] snapshot, error in
                 Task { @MainActor in
                     if let error = error {
+                        // Check if this is a permission error (expected after leaving group)
+                        let errorDescription = error.localizedDescription
+                        if errorDescription.contains("permission") || errorDescription.contains("Permission") {
+                            // This is expected when user leaves - don't show error to user
+                            return
+                        }
                         return
                     }
 
+                    // Handle conversation deleted
                     guard let snapshot = snapshot, snapshot.exists else {
+                        self.viewModel.errorMessage = "This group has been deleted."
+                        self.onDismiss()
                         return
                     }
 
                     if let updatedConversation = try? snapshot.data(as: Conversation.self) {
+                        // Check if current user was removed from the group
+                        if let currentUserId = UserService.shared.currentUserId {
+                            let isStillInGroup = updatedConversation.participantIds.contains(currentUserId)
+
+                            if !isStillInGroup {
+                                // User is no longer in the group (either left or was removed)
+                                // Set the binding to trigger navigation
+                                self.userLeftGroup = true
+                                self.onDismiss()
+                                return
+                            }
+                        }
+
                         self.conversation = updatedConversation
                     }
                 }
@@ -483,18 +553,85 @@ struct GroupInfoView: View {
     }
 }
 
-#Preview {
-    NavigationStack {
-        GroupInfoView(
-            conversation: Conversation(
-                id: "preview",
-                participantIds: ["user1", "user2", "user3"],
-                lastMessage: "Hello!",
-                lastMessageTime: Date(),
-                isGroupChat: true,
-                groupName: "Team Chat",
-                groupImageUrl: "https://ui-avatars.com/api/?name=T&background=random"
-            )
-        )
+// MARK: - Skeleton Loading Components
+
+struct ParticipantSkeletonRow: View {
+    @State private var isAnimating = false
+
+    var body: some View {
+        HStack(spacing: 12) {
+            // Avatar skeleton
+            Circle()
+                .fill(Color(.systemGray5))
+                .frame(width: 44, height: 44)
+                .shimmer(isAnimating: isAnimating)
+
+            // Name skeleton
+            VStack(alignment: .leading, spacing: 6) {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color(.systemGray5))
+                    .frame(width: 120, height: 14)
+                    .shimmer(isAnimating: isAnimating)
+
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color(.systemGray5))
+                    .frame(width: 80, height: 12)
+                    .shimmer(isAnimating: isAnimating)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .onAppear {
+            withAnimation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false)) {
+                isAnimating = true
+            }
+        }
     }
+}
+
+extension View {
+    func shimmer(isAnimating: Bool) -> some View {
+        self.overlay(
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.clear,
+                    Color.white.opacity(0.3),
+                    Color.clear
+                ]),
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+            .offset(x: isAnimating ? 200 : -200)
+            .animation(Animation.linear(duration: 1.5).repeatForever(autoreverses: false), value: isAnimating)
+        )
+        .clipped()
+    }
+}
+
+#Preview {
+    struct PreviewWrapper: View {
+        @State private var userLeftGroup = false
+
+        var body: some View {
+            NavigationStack {
+                GroupInfoView(
+                    conversation: Conversation(
+                        id: "preview",
+                        participantIds: ["user1", "user2", "user3"],
+                        lastMessage: "Hello!",
+                        lastMessageTime: Date(),
+                        isGroupChat: true,
+                        groupName: "Team Chat",
+                        groupImageUrl: "https://ui-avatars.com/api/?name=T&background=random"
+                    ),
+                    userLeftGroup: $userLeftGroup,
+                    onDismiss: {}
+                )
+            }
+        }
+    }
+
+    return PreviewWrapper()
 }

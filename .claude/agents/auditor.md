@@ -104,3 +104,4 @@ Common issues to watch for:
 - Multiple sources of truth for same data
 - Improper async/await usage
 - Missing multiplayer conflict handling
+- Firestore rules / storage handling - if everything appears to work in the code, but an action is not executing, it could be do to missing permissions or config

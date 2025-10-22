@@ -56,12 +56,23 @@ struct AddParticipantsView: View {
                 await fetchAvailableUsers()
             }
             .alert("Error", isPresented: $showError) {
-                Button("OK") {
+                Button("Retry") {
+                    Task {
+                        if availableUsers.isEmpty {
+                            await fetchAvailableUsers()
+                        } else {
+                            await addSelectedParticipants()
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {
                     errorMessage = nil
                 }
             } message: {
                 if let errorMessage = errorMessage {
                     Text(errorMessage)
+                } else {
+                    Text("Something went wrong. Please try again.")
                 }
             }
             .overlay {
@@ -187,7 +198,7 @@ struct AddParticipantsView: View {
 
             isLoading = false
         } catch {
-            errorMessage = "Failed to load users: \(error.localizedDescription)"
+            errorMessage = "Couldn't load users. Please check your connection and try again."
             showError = true
             isLoading = false
         }
@@ -225,6 +236,9 @@ struct AddParticipantsView: View {
                     currentUserId: currentUserId
                 )
                 successCount += 1
+
+                // Track analytics
+                AnalyticsService.shared.trackParticipantAdded(groupSize: conversation.participantIds.count + successCount)
             } catch {
                 // Track failed additions
                 if let user = availableUsers.first(where: { $0.id == userId }) {
@@ -237,7 +251,11 @@ struct AddParticipantsView: View {
 
         // Show error if any failed
         if !failedUsers.isEmpty {
-            errorMessage = "Failed to add: \(failedUsers.joined(separator: ", "))"
+            if successCount > 0 {
+                errorMessage = "Some users couldn't be added: \(failedUsers.joined(separator: ", ")). Others were added successfully."
+            } else {
+                errorMessage = "Couldn't add participants. Please check your connection and try again."
+            }
             showError = true
         }
 

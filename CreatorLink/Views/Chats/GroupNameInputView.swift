@@ -123,13 +123,18 @@ struct GroupNameInputView: View {
                     .disabled(isCreating)
                 }
             }
-            .alert("Error", isPresented: .constant(errorMessage != nil)) {
-                Button("OK") {
+            .alert("Error Creating Group", isPresented: .constant(errorMessage != nil)) {
+                Button("Retry") {
+                    Task {
+                        await createGroup()
+                    }
+                }
+                Button("Cancel", role: .cancel) {
                     errorMessage = nil
                 }
             } message: {
                 if let errorMessage = errorMessage {
-                    Text(errorMessage)
+                    Text("We couldn't create the group. \(errorMessage)")
                 }
             }
             .task {
@@ -161,7 +166,7 @@ struct GroupNameInputView: View {
     private func createGroup() async {
         guard let currentUserId = Auth.auth().currentUser?.uid else {
             await MainActor.run {
-                errorMessage = "No user logged in"
+                errorMessage = "You must be logged in to create a group. Please sign in and try again."
             }
             return
         }
@@ -195,9 +200,16 @@ struct GroupNameInputView: View {
             allParticipants.append(currentUserId)
 
             // Validate we have at least 3 participants total
+            // Edge case: User selected exactly 2 others (3 total including themselves)
             guard allParticipants.count >= 3 else {
                 await MainActor.run {
-                    errorMessage = "Group chats require at least 3 participants (including you)"
+                    let selectedCount = selectedUserIds.count
+                    let needed = 2 - selectedCount
+                    if needed == 1 {
+                        errorMessage = "Groups need at least 3 people. Please select 1 more person."
+                    } else {
+                        errorMessage = "Groups need at least 3 people. Please select \(needed) more people."
+                    }
                     isCreating = false
                 }
                 return
@@ -212,6 +224,15 @@ struct GroupNameInputView: View {
                 groupImageUrl: imageUrl
             )
 
+            // Track analytics
+            let hasCustomImage = imageUrl != nil
+            let hasCustomName = !groupName.trimmingCharacters(in: .whitespaces).isEmpty
+            AnalyticsService.shared.trackGroupCreated(
+                groupSize: allParticipants.count,
+                hasCustomImage: hasCustomImage,
+                hasCustomName: hasCustomName
+            )
+
             // Success - dismiss both views
             await MainActor.run {
                 isCreating = false
@@ -219,7 +240,14 @@ struct GroupNameInputView: View {
             }
         } catch {
             await MainActor.run {
-                errorMessage = error.localizedDescription
+                // Provide user-friendly error messages
+                if error.localizedDescription.contains("network") || error.localizedDescription.contains("internet") {
+                    errorMessage = "Network connection lost. Please check your internet and try again."
+                } else if error.localizedDescription.contains("permission") {
+                    errorMessage = "You don't have permission to create groups. Please contact support."
+                } else {
+                    errorMessage = "Something went wrong. \(error.localizedDescription)"
+                }
                 isCreating = false
             }
         }

@@ -29,7 +29,10 @@ struct ChatDetailView: View {
     @State private var unreadMessagesCount: Int = 0
     @State private var showGroupInfo = false
     @State private var selectedMessageForDetails: Message?
+    @State private var userLeftGroup = false
+    @State private var showLeftGroupConfirmation = false
     @FocusState private var isInputFocused: Bool
+    @Environment(\.dismiss) private var dismiss
 
     // Computed property to get the live conversation from ViewModel
     private var conversation: Conversation {
@@ -217,8 +220,26 @@ struct ChatDetailView: View {
         }
         .sheet(isPresented: $showGroupInfo) {
             NavigationStack {
-                GroupInfoView(conversation: conversation)
+                GroupInfoView(conversation: conversation, userLeftGroup: $userLeftGroup) {
+                    showGroupInfo = false
+                }
             }
+        }
+        .onChange(of: userLeftGroup) { _, didLeave in
+            if didLeave {
+                // User left the group - show confirmation first
+                showGroupInfo = false
+                showLeftGroupConfirmation = true
+            }
+        }
+        .alert("Group Left", isPresented: $showLeftGroupConfirmation) {
+            Button("OK") {
+                showLeftGroupConfirmation = false
+                // Dismiss the view after user acknowledges the alert
+                dismiss()
+            }
+        } message: {
+            Text("You have left the group")
         }
         .sheet(item: $selectedMessageForDetails) { message in
             // Get participant profiles for the message
@@ -375,7 +396,7 @@ struct ChatDetailView: View {
 
     private var emptyMessagesView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "message")
+            Image(systemName: conversation.isGroupChat ? "person.3" : "message")
                 .font(.system(size: 50))
                 .foregroundColor(.secondary)
 
@@ -383,10 +404,18 @@ struct ChatDetailView: View {
                 .font(.headline)
                 .foregroundColor(.secondary)
 
-            Text("Send a message to start the conversation")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+            if conversation.isGroupChat {
+                Text("Group created! Say hello to everyone.")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+            } else {
+                Text("Send a message to start the conversation")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
         }
         .padding()
         .frame(maxWidth: .infinity, maxHeight: .infinity)

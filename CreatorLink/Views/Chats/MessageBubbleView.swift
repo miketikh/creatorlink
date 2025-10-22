@@ -113,6 +113,21 @@ struct MessageBubbleView: View {
         return formatter.string(from: message.timestamp)
     }
 
+    private var groupReadStatusLabel: String {
+        guard let readCount = readCount,
+              let totalParticipants = totalParticipants else {
+            return "Message status"
+        }
+
+        if readCount == 0 {
+            return "Read by 0 of \(totalParticipants) people"
+        } else if readCount == totalParticipants {
+            return "Read by all \(totalParticipants) people"
+        } else {
+            return "Read by \(readCount) of \(totalParticipants) people"
+        }
+    }
+
     private var statusIcon: some View {
         Group {
             // For group chats, show read count
@@ -139,6 +154,8 @@ struct MessageBubbleView: View {
                 .onTapGesture {
                     onTapStatusIndicator?()
                 }
+                .accessibilityLabel(groupReadStatusLabel)
+                .accessibilityHint("Double tap to view read details")
             } else {
                 // For one-on-one chats, keep existing behavior
                 switch message.status {

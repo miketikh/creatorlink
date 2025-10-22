@@ -4,6 +4,17 @@
 //
 //  ViewModel for managing group information screen business logic
 //
+//  Responsibilities:
+//  - Loading and displaying group participants
+//  - Updating group name and image
+//  - Managing participant removal and leaving group
+//  - Providing user-friendly error messages
+//
+//  Related Files:
+//  - GroupInfoView.swift: The view this ViewModel supports
+//  - ConversationService.swift: Handles Firebase operations
+//  - ParticipantRowView.swift: Displays individual participants
+//
 
 import Foundation
 import Observation
@@ -52,7 +63,7 @@ class GroupInfoViewModel {
             participants = fetchedParticipants
             isLoading = false
         } catch {
-            errorMessage = "Failed to load participants: \(error.localizedDescription)"
+            errorMessage = "Couldn't load group members. Please check your connection and try again."
             isLoading = false
         }
     }
@@ -87,8 +98,11 @@ class GroupInfoViewModel {
             // Update local state
             groupName = trimmedName
             isLoading = false
+
+            // Track analytics
+            AnalyticsService.shared.trackGroupNameUpdated()
         } catch {
-            errorMessage = "Failed to update group name: \(error.localizedDescription)"
+            errorMessage = "Couldn't update group name. Please check your connection and try again."
             isLoading = false
             throw error
         }
@@ -123,8 +137,11 @@ class GroupInfoViewModel {
             // Update local state
             groupImageUrl = trimmedUrl
             isLoading = false
+
+            // Track analytics
+            AnalyticsService.shared.trackGroupImageUpdated()
         } catch {
-            errorMessage = "Failed to update group image: \(error.localizedDescription)"
+            errorMessage = "Couldn't update group image. Please check your connection and try again."
             isLoading = false
             throw error
         }
@@ -141,13 +158,16 @@ class GroupInfoViewModel {
         errorMessage = nil
 
         do {
+            // Track analytics before leaving
+            AnalyticsService.shared.trackGroupLeft(groupSize: conversation.participantIds.count - 1)
+
             try await conversationService.leaveGroup(
                 conversationId: conversationId,
                 userId: userId
             )
             isLoading = false
         } catch {
-            errorMessage = "Failed to leave group: \(error.localizedDescription)"
+            errorMessage = "Couldn't leave the group. Please check your connection and try again."
             isLoading = false
             throw error
         }
@@ -174,8 +194,11 @@ class GroupInfoViewModel {
             // Remove participant from local list
             participants.removeAll { $0.id == userId }
             isLoading = false
+
+            // Track analytics
+            AnalyticsService.shared.trackParticipantRemoved(groupSize: conversation.participantIds.count - 1)
         } catch {
-            errorMessage = "Failed to remove participant: \(error.localizedDescription)"
+            errorMessage = "Couldn't remove participant. Please check your connection and try again."
             isLoading = false
             throw error
         }

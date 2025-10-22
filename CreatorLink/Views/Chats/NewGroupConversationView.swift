@@ -53,13 +53,19 @@ struct NewGroupConversationView: View {
             .task {
                 await fetchUsers()
             }
-            .alert("Error", isPresented: .constant(errorMessage != nil)) {
-                Button("OK") {
+            .alert("Error Loading Users", isPresented: .constant(errorMessage != nil)) {
+                Button("Retry") {
+                    Task {
+                        await fetchUsers()
+                    }
+                }
+                Button("Cancel", role: .cancel) {
                     errorMessage = nil
+                    dismiss()
                 }
             } message: {
                 if let errorMessage = errorMessage {
-                    Text(errorMessage)
+                    Text("We couldn't load the user list. \(errorMessage)")
                 }
             }
             .navigationDestination(isPresented: $showGroupNameInput) {
