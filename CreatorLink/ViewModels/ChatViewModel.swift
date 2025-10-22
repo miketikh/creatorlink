@@ -166,7 +166,8 @@ class ChatViewModel {
 
         do {
             // Use batch update for efficiency
-            try await messageService.markMessagesAsRead(messageIds: messageIds, userId: currentUserId)
+            // Pass conversationId for unread count optimization
+            try await messageService.markMessagesAsRead(messageIds: messageIds, userId: currentUserId, conversationId: conversationId)
         } catch {
             // Don't throw - this is a non-critical operation that shouldn't block the UI
         }

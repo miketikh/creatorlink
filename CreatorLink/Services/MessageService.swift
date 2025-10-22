@@ -44,6 +44,12 @@ class MessageService {
             // Add document to Firestore
             let docRef = try await messagesCollection.addDocument(data: messageData)
 
+            // OPTIMIZATION: Increment denormalized unread count for all participants except sender
+            let otherParticipants = participantIds.filter { $0 != senderId }
+            for participantId in otherParticipants {
+                try? await incrementUnreadCount(conversationId: conversationId, userId: participantId)
+            }
+
             // Return message with Firestore-generated ID
             return Message(
                 id: docRef.documentID,
@@ -143,12 +149,18 @@ class MessageService {
     /// - Parameters:
     ///   - messageId: The ID of the message
     ///   - userId: The ID of the user who read the message
-    func markMessageAsRead(messageId: String, userId: String) async throws {
+    ///   - conversationId: The ID of the conversation (optional, for unread count optimization)
+    func markMessageAsRead(messageId: String, userId: String, conversationId: String? = nil) async throws {
         do {
             try await messagesCollection.document(messageId).updateData([
                 "readBy.\(userId)": FieldValue.serverTimestamp(),
                 "status": MessageStatus.read.rawValue
             ])
+
+            // OPTIMIZATION: Decrement denormalized unread count in conversation
+            if let conversationId = conversationId {
+                try? await decrementUnreadCount(conversationId: conversationId, userId: userId)
+            }
         } catch {
             throw MessageError.updateFailed(error)
         }
@@ -158,7 +170,8 @@ class MessageService {
     /// - Parameters:
     ///   - messageIds: Array of message IDs to mark as read
     ///   - userId: The ID of the user who read the messages
-    func markMessagesAsRead(messageIds: [String], userId: String) async throws {
+    ///   - conversationId: The ID of the conversation (optional, for unread count optimization)
+    func markMessagesAsRead(messageIds: [String], userId: String, conversationId: String? = nil) async throws {
         guard !messageIds.isEmpty else { return }
 
         do {
@@ -174,9 +187,44 @@ class MessageService {
             }
 
             try await batch.commit()
+
+            // OPTIMIZATION: Update denormalized unread count after batch read
+            if let conversationId = conversationId {
+                // Decrement by the number of messages marked as read
+                try? await decrementUnreadCount(conversationId: conversationId, userId: userId, amount: messageIds.count)
+            }
         } catch {
             throw MessageError.updateFailed(error)
         }
+    }
+
+    // MARK: - Unread Count Optimization
+
+    /// Increments the denormalized unread count for a user in a conversation
+    /// Called when a new message is sent (other participants get +1 unread)
+    private func incrementUnreadCount(conversationId: String, userId: String) async throws {
+        let conversationRef = FirestoreService.shared.conversationsCollection.document(conversationId)
+        try await conversationRef.updateData([
+            "unreadCounts.\(userId)": FieldValue.increment(Int64(1))
+        ])
+    }
+
+    /// Decrements the denormalized unread count for a user in a conversation
+    /// Called when messages are marked as read
+    private func decrementUnreadCount(conversationId: String, userId: String, amount: Int = 1) async throws {
+        let conversationRef = FirestoreService.shared.conversationsCollection.document(conversationId)
+        try await conversationRef.updateData([
+            "unreadCounts.\(userId)": FieldValue.increment(Int64(-amount))
+        ])
+    }
+
+    /// Resets the unread count to zero for a user in a conversation
+    /// Called when all messages in a conversation are marked as read
+    func resetUnreadCount(conversationId: String, userId: String) async throws {
+        let conversationRef = FirestoreService.shared.conversationsCollection.document(conversationId)
+        try await conversationRef.updateData([
+            "unreadCounts.\(userId)": 0
+        ])
     }
 }
 

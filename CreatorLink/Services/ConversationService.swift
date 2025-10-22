@@ -46,13 +46,20 @@ class ConversationService {
             finalGroupImageUrl = nil
         }
 
+        // Initialize unreadCounts to 0 for all participants (optimization for unread badges)
+        var unreadCounts: [String: Int] = [:]
+        for participantId in participantIds {
+            unreadCounts[participantId] = 0
+        }
+
         let conversationData: [String: Any] = [
             "participantIds": participantIds.sorted(), // Sort for consistent lookups
             "lastMessage": "",
             "lastMessageTime": Timestamp(date: Date()),
             "isGroupChat": isGroupChat,
             "groupName": groupName ?? NSNull(),
-            "groupImageUrl": finalGroupImageUrl ?? NSNull()
+            "groupImageUrl": finalGroupImageUrl ?? NSNull(),
+            "unreadCounts": unreadCounts
         ]
 
         do {
@@ -65,7 +72,8 @@ class ConversationService {
                 lastMessageTime: Date(),
                 isGroupChat: isGroupChat,
                 groupName: groupName,
-                groupImageUrl: finalGroupImageUrl
+                groupImageUrl: finalGroupImageUrl,
+                unreadCounts: unreadCounts
             )
 
             return conversation
@@ -279,8 +287,10 @@ class ConversationService {
             updatedParticipantIds.append(userId)
 
             // Update Firestore document with new participantIds
+            // Also initialize unread count to 0 for the new participant
             try await docRef.updateData([
-                "participantIds": updatedParticipantIds.sorted()
+                "participantIds": updatedParticipantIds.sorted(),
+                "unreadCounts.\(userId)": 0
             ])
 
             // Create system message
@@ -323,8 +333,10 @@ class ConversationService {
             updatedParticipantIds.removeAll { $0 == userId }
 
             // Update Firestore document
+            // Also remove the unread count for the removed participant
             try await docRef.updateData([
-                "participantIds": updatedParticipantIds.sorted()
+                "participantIds": updatedParticipantIds.sorted(),
+                "unreadCounts.\(userId)": FieldValue.delete()
             ])
 
             // Create system message
@@ -363,8 +375,10 @@ class ConversationService {
                 try await createSystemMessage(conversationId: conversationId, text: "left the group", senderId: userId)
 
                 // Update Firestore document
+                // Also remove the unread count for the leaving user
                 try await docRef.updateData([
-                    "participantIds": updatedParticipantIds.sorted()
+                    "participantIds": updatedParticipantIds.sorted(),
+                    "unreadCounts.\(userId)": FieldValue.delete()
                 ])
             }
         } catch let error as ConversationError {

@@ -92,7 +92,7 @@ struct ConversationRowView: View {
 
                 // Unread count badge
                 if unreadCount > 0 {
-                    Text("\(min(unreadCount, 99))")
+                    Text(unreadCount > 99 ? "99+" : "\(unreadCount)")
                         .font(.caption2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
@@ -347,9 +347,17 @@ struct ConversationRowView: View {
     }
 
     private func loadUnreadCount() async {
-        // Initial fetch of unread count
-        let count = await viewModel.getUnreadCount(for: conversation)
-        unreadCount = count
+        // OPTIMIZATION: First check denormalized count in conversation document
+        if let unreadCounts = conversation.unreadCounts,
+           let currentUserId = viewModel.currentUserId,
+           let count = unreadCounts[currentUserId] {
+            // Use denormalized count from conversation document (fast)
+            unreadCount = count
+        } else {
+            // Fallback: Calculate from messages (slower)
+            let count = await viewModel.getUnreadCount(for: conversation)
+            unreadCount = count
+        }
 
         // Set up real-time listener to update unread count when messages change
         setupUnreadCountListener()
@@ -367,6 +375,9 @@ struct ConversationRowView: View {
         // Listen to message changes in this conversation
         messageListener = MessageService.shared.listenToMessages(conversationId: conversationId, userId: currentUserId) { [self] messages in
             // Count unread messages (messages not sent by current user and not in readBy)
+            // This logic works for both one-on-one and group chats:
+            // - Filter out messages from current user (don't count own messages as unread)
+            // - Filter out messages where current user is in readBy dictionary
             let newUnreadCount = messages.filter { message in
                 message.senderId != currentUserId && message.readBy[currentUserId] == nil
             }.count

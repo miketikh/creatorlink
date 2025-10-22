@@ -100,14 +100,32 @@ class ConversationsViewModel {
     }
 
     /// Gets unread message count for a conversation
+    /// Works for both one-on-one and group chats by counting messages:
+    /// - Not sent by current user (senderId != currentUserId)
+    /// - Not yet read by current user (currentUserId not in readBy map)
+    ///
+    /// Optimization Strategy:
+    /// 1. First, try to use denormalized unreadCounts from conversation document
+    /// 2. If not available, fall back to querying messages (slower but accurate)
     func getUnreadCount(for conversation: Conversation) async -> Int {
-        guard let conversationId = conversation.id,
-              let currentUserId = currentUserId else {
+        guard let currentUserId = currentUserId else {
+            return 0
+        }
+
+        // OPTIMIZATION: Use denormalized count if available
+        if let unreadCounts = conversation.unreadCounts,
+           let count = unreadCounts[currentUserId] {
+            return count
+        }
+
+        // FALLBACK: Query messages if denormalized count not available
+        // This happens for older conversations created before optimization
+        guard let conversationId = conversation.id else {
             return 0
         }
 
         do {
-            // Query messages where current user is NOT in readBy map
+            // Query messages where current user is a participant
             let snapshot = try await FirestoreService.shared.messagesCollection
                 .whereField("conversationId", isEqualTo: conversationId)
                 .whereField("participantIds", arrayContains: currentUserId)
@@ -121,6 +139,7 @@ class ConversationsViewModel {
                 let senderId = data["senderId"] as? String ?? ""
                 let readBy = data["readBy"] as? [String: Any] ?? [:]
 
+                // Count messages from others that haven't been read by current user
                 if senderId != currentUserId && readBy[currentUserId] == nil {
                     unreadCount += 1
                 }
@@ -128,6 +147,7 @@ class ConversationsViewModel {
 
             return unreadCount
         } catch {
+            // Return 0 on error rather than showing incorrect badge
             return 0
         }
     }
