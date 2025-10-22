@@ -1,4 +1,3 @@
-# iOS Development Notes
 
 Quick reference for common patterns and issues in this project.
 
@@ -9,7 +8,8 @@ Quick reference for common patterns and issues in this project.
 
 ## Build Workflow
 
-- **Always rebuild ALL running simulators** when making changes (use parallel build_run_sim calls)
+- **When testing if something builds or debugging build errors:** Just build once to verify compilation
+- **When the build succeeds and testing features:** Run the build on ALL running simulators in parallel (use parallel build_run_sim calls)
 
 ## Debugging Workflow
 
