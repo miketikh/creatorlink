@@ -245,6 +245,174 @@ class ConversationService {
         }
     }
 
+    // MARK: - Participant Management
+
+    /// Adds a participant to a group conversation
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - userId: The ID of the user to add
+    ///   - currentUserId: The ID of the user performing the action (for authorization)
+    func addParticipant(conversationId: String, userId: String, currentUserId: String) async throws {
+        do {
+            // Fetch conversation document
+            let docRef = conversationsCollection.document(conversationId)
+            let document = try await docRef.getDocument()
+
+            guard document.exists,
+                  let conversation = try? document.data(as: Conversation.self) else {
+                throw ConversationError.invalidData
+            }
+
+            // Validate currentUserId is in the group (authorization check)
+            guard conversation.participantIds.contains(currentUserId) else {
+                throw ConversationError.unauthorized
+            }
+
+            // Check if userId is already in participantIds
+            guard !conversation.participantIds.contains(userId) else {
+                // User already in group, no action needed
+                return
+            }
+
+            // Append to participantIds array
+            var updatedParticipantIds = conversation.participantIds
+            updatedParticipantIds.append(userId)
+
+            // Update Firestore document with new participantIds
+            try await docRef.updateData([
+                "participantIds": updatedParticipantIds.sorted()
+            ])
+
+            // Create system message
+            try await createSystemMessage(conversationId: conversationId, text: "added a new member to the group", senderId: currentUserId)
+        } catch let error as ConversationError {
+            throw error
+        } catch {
+            throw ConversationError.updateFailed(error)
+        }
+    }
+
+    /// Removes a participant from a group conversation
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - userId: The ID of the user to remove
+    ///   - currentUserId: The ID of the user performing the action (for authorization)
+    func removeParticipant(conversationId: String, userId: String, currentUserId: String) async throws {
+        do {
+            // Prevent removing oneself (must use leaveGroup instead)
+            guard userId != currentUserId else {
+                throw ConversationError.cannotRemoveSelf
+            }
+
+            // Fetch conversation document
+            let docRef = conversationsCollection.document(conversationId)
+            let document = try await docRef.getDocument()
+
+            guard document.exists,
+                  let conversation = try? document.data(as: Conversation.self) else {
+                throw ConversationError.invalidData
+            }
+
+            // Validate currentUserId is in the group
+            guard conversation.participantIds.contains(currentUserId) else {
+                throw ConversationError.unauthorized
+            }
+
+            // Remove userId from participantIds array
+            var updatedParticipantIds = conversation.participantIds
+            updatedParticipantIds.removeAll { $0 == userId }
+
+            // Update Firestore document
+            try await docRef.updateData([
+                "participantIds": updatedParticipantIds.sorted()
+            ])
+
+            // Create system message
+            try await createSystemMessage(conversationId: conversationId, text: "removed a member from the group", senderId: currentUserId)
+        } catch let error as ConversationError {
+            throw error
+        } catch {
+            throw ConversationError.updateFailed(error)
+        }
+    }
+
+    /// Leaves a group conversation
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - userId: The ID of the user leaving
+    func leaveGroup(conversationId: String, userId: String) async throws {
+        do {
+            // Fetch conversation document
+            let docRef = conversationsCollection.document(conversationId)
+            let document = try await docRef.getDocument()
+
+            guard document.exists,
+                  let conversation = try? document.data(as: Conversation.self) else {
+                throw ConversationError.invalidData
+            }
+
+            // Remove userId from participantIds
+            var updatedParticipantIds = conversation.participantIds
+            updatedParticipantIds.removeAll { $0 == userId }
+
+            // If participantIds becomes empty, delete conversation
+            if updatedParticipantIds.isEmpty {
+                try await deleteConversation(conversationId: conversationId)
+            } else {
+                // Create system message before updating
+                try await createSystemMessage(conversationId: conversationId, text: "left the group", senderId: userId)
+
+                // Update Firestore document
+                try await docRef.updateData([
+                    "participantIds": updatedParticipantIds.sorted()
+                ])
+            }
+        } catch let error as ConversationError {
+            throw error
+        } catch {
+            throw ConversationError.updateFailed(error)
+        }
+    }
+
+    /// Creates a system message to indicate membership changes
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - text: The system message text
+    ///   - senderId: The ID of the user who performed the action
+    private func createSystemMessage(conversationId: String, text: String, senderId: String) async throws {
+        do {
+            // Fetch sender's name
+            let senderProfile = try await UserService.shared.fetchUser(userId: senderId)
+            let messageText = "\(senderProfile.displayName) \(text)"
+
+            // Fetch current participant IDs for the message
+            let document = try await conversationsCollection.document(conversationId).getDocument()
+            guard let conversation = try? document.data(as: Conversation.self) else {
+                return
+            }
+
+            let messageData: [String: Any] = [
+                "conversationId": conversationId,
+                "senderId": "system",
+                "participantIds": conversation.participantIds,
+                "text": messageText,
+                "timestamp": Timestamp(date: Date()),
+                "status": MessageStatus.sent.rawValue,
+                "readBy": [:],
+                "imageUrl": NSNull(),
+                "metadata": ["isSystemMessage": true]
+            ]
+
+            let messagesCollection = db.collection("messages")
+            try await messagesCollection.addDocument(data: messageData)
+
+            // Update conversation's last message
+            try await updateLastMessage(conversationId: conversationId, text: messageText, timestamp: Date())
+        } catch {
+            // Don't throw - system messages are nice to have but not critical
+        }
+    }
+
     // MARK: - Delete Conversation
 
     /// Deletes a conversation
@@ -290,6 +458,8 @@ enum ConversationError: LocalizedError {
     case updateFailed(Error)
     case deletionFailed(Error)
     case invalidData
+    case unauthorized
+    case cannotRemoveSelf
 
     var errorDescription: String? {
         switch self {
@@ -303,6 +473,10 @@ enum ConversationError: LocalizedError {
             return "Failed to delete conversation: \(error.localizedDescription)"
         case .invalidData:
             return "Invalid conversation data"
+        case .unauthorized:
+            return "You must be a member of this group to perform this action"
+        case .cannotRemoveSelf:
+            return "Cannot remove yourself from the group. Use 'Leave Group' instead"
         }
     }
 }

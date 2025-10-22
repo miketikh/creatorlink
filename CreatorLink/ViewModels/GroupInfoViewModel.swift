@@ -132,14 +132,53 @@ class GroupInfoViewModel {
 
     // MARK: - Leave Group
 
-    /// Leaves the group (to be implemented in Phase 6)
+    /// Leaves the group
     /// - Parameters:
     ///   - conversationId: The ID of the conversation
     ///   - userId: The ID of the user leaving
     func leaveGroup(conversationId: String, userId: String) async throws {
-        // TODO: Implement in Phase 6 with add/remove participant logic
-        // Will call ConversationService.shared.leaveGroup()
-        throw GroupInfoError.notImplemented
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await conversationService.leaveGroup(
+                conversationId: conversationId,
+                userId: userId
+            )
+            isLoading = false
+        } catch {
+            errorMessage = "Failed to leave group: \(error.localizedDescription)"
+            isLoading = false
+            throw error
+        }
+    }
+
+    // MARK: - Remove Participant
+
+    /// Removes a participant from the group
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - userId: The ID of the user to remove
+    ///   - currentUserId: The ID of the user performing the action
+    func removeParticipant(conversationId: String, userId: String, currentUserId: String) async throws {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await conversationService.removeParticipant(
+                conversationId: conversationId,
+                userId: userId,
+                currentUserId: currentUserId
+            )
+
+            // Remove participant from local list
+            participants.removeAll { $0.id == userId }
+            isLoading = false
+        } catch {
+            errorMessage = "Failed to remove participant: \(error.localizedDescription)"
+            isLoading = false
+            throw error
+        }
     }
 
     // MARK: - Helper Methods
@@ -164,7 +203,6 @@ enum GroupInfoError: LocalizedError {
     case emptyName
     case nameTooLong
     case invalidImageUrl
-    case notImplemented
 
     var errorDescription: String? {
         switch self {
@@ -174,8 +212,6 @@ enum GroupInfoError: LocalizedError {
             return "Group name must be 35 characters or less"
         case .invalidImageUrl:
             return "Image URL must start with http:// or https://"
-        case .notImplemented:
-            return "This feature will be implemented in Phase 6"
         }
     }
 }

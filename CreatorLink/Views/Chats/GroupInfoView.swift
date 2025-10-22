@@ -20,6 +20,9 @@ struct GroupInfoView: View {
     @State private var imagePreviewUrl: String?
     @State private var conversation: Conversation
     @State private var conversationListener: ListenerRegistration?
+    @State private var showAddParticipants = false
+    @State private var participantToRemove: UserProfile?
+    @State private var showRemoveConfirmation = false
     @Environment(\.dismiss) var dismiss
 
     init(conversation: Conversation) {
@@ -76,6 +79,32 @@ struct GroupInfoView: View {
             }
         } message: {
             Text("Are you sure you want to leave this group? You will no longer receive messages from this group.")
+        }
+        .sheet(isPresented: $showAddParticipants) {
+            AddParticipantsView(
+                conversation: conversation,
+                existingParticipantIds: conversation.participantIds
+            )
+        }
+        .onChange(of: conversation.participantIds) { _, _ in
+            // Reload participants when participant list changes
+            Task {
+                await viewModel.loadParticipants()
+            }
+        }
+        .alert("Remove Participant", isPresented: $showRemoveConfirmation) {
+            Button("Cancel", role: .cancel) {
+                participantToRemove = nil
+            }
+            Button("Remove", role: .destructive) {
+                Task {
+                    await removeParticipantConfirmed()
+                }
+            }
+        } message: {
+            if let participant = participantToRemove {
+                Text("Are you sure you want to remove \(participant.displayName) from this group?")
+            }
         }
     }
 
@@ -250,6 +279,16 @@ struct GroupInfoView: View {
                                 showOnlineStatus: true,
                                 isCurrentUser: isCurrentUser
                             )
+                            .contextMenu {
+                                if !isCurrentUser {
+                                    Button(role: .destructive) {
+                                        participantToRemove = participant
+                                        showRemoveConfirmation = true
+                                    } label: {
+                                        Label("Remove from Group", systemImage: "person.badge.minus")
+                                    }
+                                }
+                            }
 
                             if participant.id != viewModel.participants.last?.id {
                                 Divider()
@@ -270,9 +309,9 @@ struct GroupInfoView: View {
 
     private var actionsSection: some View {
         VStack(spacing: 16) {
-            // Add Participants button (will be implemented in Phase 6)
+            // Add Participants button
             Button {
-                // TODO: Implement in Phase 6
+                showAddParticipants = true
             } label: {
                 HStack {
                     Image(systemName: "person.badge.plus")
@@ -284,8 +323,6 @@ struct GroupInfoView: View {
                 .foregroundColor(.white)
                 .cornerRadius(12)
             }
-            .disabled(true) // Will be enabled in Phase 6
-            .opacity(0.5)
 
             // Leave Group button
             Button {
@@ -345,7 +382,28 @@ struct GroupInfoView: View {
             try await viewModel.leaveGroup(conversationId: conversationId, userId: userId)
             dismiss()
         } catch {
-            // Error is shown via viewModel.errorMessage (will be implemented in Phase 6)
+            // Error is shown via viewModel.errorMessage
+        }
+    }
+
+    private func removeParticipantConfirmed() async {
+        guard let conversationId = conversation.id,
+              let userId = participantToRemove?.id,
+              let currentUserId = UserService.shared.currentUserId else {
+            participantToRemove = nil
+            return
+        }
+
+        do {
+            try await viewModel.removeParticipant(
+                conversationId: conversationId,
+                userId: userId,
+                currentUserId: currentUserId
+            )
+            participantToRemove = nil
+        } catch {
+            // Error is shown via viewModel.errorMessage
+            participantToRemove = nil
         }
     }
 
