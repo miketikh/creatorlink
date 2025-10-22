@@ -1,0 +1,181 @@
+//
+//  GroupInfoViewModel.swift
+//  CreatorLink
+//
+//  ViewModel for managing group information screen business logic
+//
+
+import Foundation
+import Observation
+
+@Observable
+@MainActor
+class GroupInfoViewModel {
+    var participants: [UserProfile] = []
+    var groupName: String
+    var groupImageUrl: String
+    var isLoading = false
+    var errorMessage: String?
+
+    private let conversation: Conversation
+    private let userService = UserService.shared
+    private let conversationService = ConversationService.shared
+
+    // MARK: - Initialization
+
+    init(conversation: Conversation) {
+        self.conversation = conversation
+        self.groupName = conversation.groupName ?? "Group Chat"
+        self.groupImageUrl = conversation.groupImageUrl ?? ""
+    }
+
+    // MARK: - Load Participants
+
+    /// Loads all participant profiles for the group
+    func loadParticipants() async {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            var fetchedParticipants: [UserProfile] = []
+
+            for participantId in conversation.participantIds {
+                do {
+                    let profile = try await userService.fetchUser(userId: participantId)
+                    fetchedParticipants.append(profile)
+                } catch {
+                    // Continue loading other participants even if one fails
+                    continue
+                }
+            }
+
+            participants = fetchedParticipants
+            isLoading = false
+        } catch {
+            errorMessage = "Failed to load participants: \(error.localizedDescription)"
+            isLoading = false
+        }
+    }
+
+    // MARK: - Update Group Name
+
+    /// Updates the group name
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - newName: The new group name
+    func updateGroupName(conversationId: String, newName: String) async throws {
+        // Validate name
+        let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedName.isEmpty else {
+            throw GroupInfoError.emptyName
+        }
+
+        guard trimmedName.count <= 35 else {
+            throw GroupInfoError.nameTooLong
+        }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await conversationService.updateGroupName(
+                conversationId: conversationId,
+                groupName: trimmedName
+            )
+
+            // Update local state
+            groupName = trimmedName
+            isLoading = false
+        } catch {
+            errorMessage = "Failed to update group name: \(error.localizedDescription)"
+            isLoading = false
+            throw error
+        }
+    }
+
+    // MARK: - Update Group Image
+
+    /// Updates the group image URL
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - newImageUrl: The new image URL
+    func updateGroupImage(conversationId: String, newImageUrl: String) async throws {
+        // Validate URL
+        let trimmedUrl = newImageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Allow empty URL (will use fallback)
+        if !trimmedUrl.isEmpty {
+            guard validateImageUrl(trimmedUrl) else {
+                throw GroupInfoError.invalidImageUrl
+            }
+        }
+
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await conversationService.updateGroupImageUrl(
+                conversationId: conversationId,
+                imageUrl: trimmedUrl.isEmpty ? nil : trimmedUrl
+            )
+
+            // Update local state
+            groupImageUrl = trimmedUrl
+            isLoading = false
+        } catch {
+            errorMessage = "Failed to update group image: \(error.localizedDescription)"
+            isLoading = false
+            throw error
+        }
+    }
+
+    // MARK: - Leave Group
+
+    /// Leaves the group (to be implemented in Phase 6)
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - userId: The ID of the user leaving
+    func leaveGroup(conversationId: String, userId: String) async throws {
+        // TODO: Implement in Phase 6 with add/remove participant logic
+        // Will call ConversationService.shared.leaveGroup()
+        throw GroupInfoError.notImplemented
+    }
+
+    // MARK: - Helper Methods
+
+    /// Validates an image URL
+    /// - Parameter url: The URL string to validate
+    /// - Returns: True if valid, false otherwise
+    private func validateImageUrl(_ url: String) -> Bool {
+        // Allow nil/empty (will use fallback)
+        if url.isEmpty {
+            return true
+        }
+
+        // Check if starts with http:// or https://
+        return url.hasPrefix("http://") || url.hasPrefix("https://")
+    }
+}
+
+// MARK: - Error Types
+
+enum GroupInfoError: LocalizedError {
+    case emptyName
+    case nameTooLong
+    case invalidImageUrl
+    case notImplemented
+
+    var errorDescription: String? {
+        switch self {
+        case .emptyName:
+            return "Group name cannot be empty"
+        case .nameTooLong:
+            return "Group name must be 35 characters or less"
+        case .invalidImageUrl:
+            return "Image URL must start with http:// or https://"
+        case .notImplemented:
+            return "This feature will be implemented in Phase 6"
+        }
+    }
+}

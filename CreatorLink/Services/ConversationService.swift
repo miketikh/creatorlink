@@ -205,9 +205,40 @@ class ConversationService {
     ///   - conversationId: The ID of the conversation
     ///   - groupName: The new group name
     func updateGroupName(conversationId: String, groupName: String) async throws {
+        // Validate name length (max 35 characters)
+        guard groupName.count <= 35 else {
+            throw ConversationError.invalidData
+        }
+
+        // Ensure name is not empty
+        guard !groupName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ConversationError.invalidData
+        }
+
         do {
             try await conversationsCollection.document(conversationId).updateData([
                 "groupName": groupName
+            ])
+        } catch {
+            throw ConversationError.updateFailed(error)
+        }
+    }
+
+    // MARK: - Update Group Image
+
+    /// Updates the image URL of a group conversation
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - imageUrl: The new image URL (nil to remove custom image)
+    func updateGroupImageUrl(conversationId: String, imageUrl: String?) async throws {
+        // Validate URL format if provided
+        if let url = imageUrl, !validateImageUrl(url) {
+            throw ConversationError.invalidData
+        }
+
+        do {
+            try await conversationsCollection.document(conversationId).updateData([
+                "groupImageUrl": imageUrl ?? NSNull()
             ])
         } catch {
             throw ConversationError.updateFailed(error)
@@ -235,6 +266,19 @@ class ConversationService {
         let firstLetter = String(groupName.prefix(1)).uppercased()
         let encodedLetter = firstLetter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "G"
         return "https://ui-avatars.com/api/?name=\(encodedLetter)&background=random"
+    }
+
+    /// Validates an image URL
+    /// - Parameter url: The URL string to validate
+    /// - Returns: True if valid, false otherwise
+    private func validateImageUrl(_ url: String?) -> Bool {
+        // Allow nil (will use fallback)
+        guard let url = url, !url.isEmpty else {
+            return true
+        }
+
+        // Check if starts with http:// or https://
+        return url.hasPrefix("http://") || url.hasPrefix("https://")
     }
 }
 

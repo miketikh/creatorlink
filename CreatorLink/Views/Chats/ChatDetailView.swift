@@ -27,6 +27,7 @@ struct ChatDetailView: View {
     @State private var isNearBottom: Bool = true
     @State private var scrollProxy: ScrollViewProxy? = nil
     @State private var unreadMessagesCount: Int = 0
+    @State private var showGroupInfo = false
     @FocusState private var isInputFocused: Bool
 
     // Computed property to get the live conversation from ViewModel
@@ -132,6 +133,19 @@ struct ChatDetailView: View {
                             }
                         }
                     }
+
+                    // Chevron icon for group chats to indicate tappability
+                    if conversation.isGroupChat {
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if conversation.isGroupChat {
+                        showGroupInfo = true
+                    }
                 }
             }
         }
@@ -198,6 +212,11 @@ struct ChatDetailView: View {
         } message: {
             if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
+            }
+        }
+        .sheet(isPresented: $showGroupInfo) {
+            NavigationStack {
+                GroupInfoView(conversation: conversation)
             }
         }
     }

@@ -47,16 +47,24 @@ struct Conversation: Identifiable, Codable, Hashable {
     // Hashable conformance - include ALL properties that affect UI rendering (per ios_dev_notes.md)
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+        hasher.combine(participantIds)
         hasher.combine(lastMessage)
         hasher.combine(lastMessageTime)
+        hasher.combine(isGroupChat)
+        hasher.combine(groupName)
+        hasher.combine(groupImageUrl)
         hasher.combine(lastMessageSenderId)
         hasher.combine(lastMessageStatus)
     }
 
     static func == (lhs: Conversation, rhs: Conversation) -> Bool {
         return lhs.id == rhs.id &&
+               lhs.participantIds == rhs.participantIds &&
                lhs.lastMessage == rhs.lastMessage &&
                lhs.lastMessageTime == rhs.lastMessageTime &&
+               lhs.isGroupChat == rhs.isGroupChat &&
+               lhs.groupName == rhs.groupName &&
+               lhs.groupImageUrl == rhs.groupImageUrl &&
                lhs.lastMessageSenderId == rhs.lastMessageSenderId &&
                lhs.lastMessageStatus == rhs.lastMessageStatus
     }
