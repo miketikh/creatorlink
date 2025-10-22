@@ -11,39 +11,80 @@ struct MessageBubbleView: View {
     let message: Message
     let isFromCurrentUser: Bool
     var showTimestamp: Bool = true
+    var isGroupChat: Bool = false
+    var showSenderInfo: Bool = false
+    var showSenderAvatar: Bool = false
+    var senderName: String? = nil
+    var senderPhotoUrl: String? = nil
 
     var body: some View {
-        HStack {
-            if isFromCurrentUser {
-                Spacer(minLength: 60)
+        VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
+            // Sender name header (only for group chats, not current user)
+            if showSenderInfo && isGroupChat && !isFromCurrentUser, let name = senderName {
+                MessageSenderHeaderView(senderName: name, alignment: .leading)
+                    .padding(.leading, 42) // Align with message text (avatar width + spacing)
             }
 
-            VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                // Message bubble
-                Text(message.text)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(backgroundColor)
-                    .foregroundColor(textColor)
-                    .cornerRadius(18)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: bubbleAlignment)
+            HStack(alignment: .bottom, spacing: 8) {
+                // Sender avatar (only for group chats, others' messages)
+                if isGroupChat && !isFromCurrentUser {
+                    if showSenderAvatar {
+                        // Show avatar on the last message in a group (WhatsApp style)
+                        if let photoUrl = senderPhotoUrl, let url = URL(string: photoUrl) {
+                            AsyncImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            } placeholder: {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.3))
+                            }
+                            .frame(width: 30, height: 30)
+                            .clipShape(Circle())
+                        } else {
+                            // Placeholder avatar
+                            Circle()
+                                .fill(Color.blue.opacity(0.3))
+                                .frame(width: 30, height: 30)
+                        }
+                    } else {
+                        // Empty space to maintain alignment for consecutive messages
+                        Color.clear
+                            .frame(width: 30, height: 30)
+                    }
+                }
 
-                // Timestamp and status (only show if showTimestamp is true)
-                if showTimestamp {
-                    HStack(spacing: 4) {
-                        Text(formattedTimestamp)
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                if isFromCurrentUser {
+                    Spacer(minLength: 60)
+                }
 
-                        if isFromCurrentUser {
-                            statusIcon
+                VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
+                    // Message bubble
+                    Text(message.text)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(backgroundColor)
+                        .foregroundColor(textColor)
+                        .cornerRadius(18)
+                        .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: bubbleAlignment)
+
+                    // Timestamp and status (only show if showTimestamp is true)
+                    if showTimestamp {
+                        HStack(spacing: 4) {
+                            Text(formattedTimestamp)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+
+                            if isFromCurrentUser {
+                                statusIcon
+                            }
                         }
                     }
                 }
-            }
 
-            if !isFromCurrentUser {
-                Spacer(minLength: 60)
+                if !isFromCurrentUser {
+                    Spacer(minLength: 60)
+                }
             }
         }
     }

@@ -21,6 +21,7 @@ class ChatViewModel {
     var typingUserIds: [String] = []
     var typingUserNames: [String] = []
     var isViewActive = false  // Track if chat view is currently visible
+    var senderProfiles: [String: UserProfile] = [:]  // Cache for sender profiles
 
     private let messageService = MessageService.shared
     private let conversationService = ConversationService.shared
@@ -202,6 +203,105 @@ class ChatViewModel {
             // Clear typing immediately when user stops
             typingService.clearTyping(conversationId: conversationId, userId: currentUserId)
         }
+    }
+
+    // MARK: - Sender Info Methods
+
+    /// Fetches sender profile for a given user ID (with caching)
+    /// - Parameter userId: The user ID to fetch
+    /// - Returns: UserProfile if found, nil otherwise
+    func fetchSenderProfile(userId: String) async -> UserProfile? {
+        // Check cache first
+        if let cached = senderProfiles[userId] {
+            return cached
+        }
+
+        // Fetch from service
+        do {
+            let profile = try await userService.fetchUser(userId: userId)
+            senderProfiles[userId] = profile
+            return profile
+        } catch {
+            return nil
+        }
+    }
+
+    /// Gets sender display name from cache (synchronous)
+    /// - Parameter userId: The user ID
+    /// - Returns: Display name or fallback
+    func getSenderName(userId: String) -> String {
+        return senderProfiles[userId]?.displayName ?? "Someone"
+    }
+
+    /// Gets sender photo URL from cache (synchronous)
+    /// - Parameter userId: The user ID
+    /// - Returns: Photo URL if available
+    func getSenderPhotoUrl(userId: String) -> String? {
+        return senderProfiles[userId]?.photoURL
+    }
+
+    /// Determines if sender info should be shown for a message (smart grouping logic)
+    /// - Parameters:
+    ///   - currentMessage: The message to check
+    ///   - previousMessage: The previous message in the list
+    ///   - currentUserId: The current user's ID
+    /// - Returns: True if sender name/avatar should be shown
+    func shouldShowSenderInfo(currentMessage: Message, previousMessage: Message?, currentUserId: String) -> Bool {
+        // Never show for current user's messages
+        if currentMessage.senderId == currentUserId {
+            return false
+        }
+
+        // Always show for first message
+        guard let previous = previousMessage else {
+            return true
+        }
+
+        // Show if sender changed
+        if previous.senderId != currentMessage.senderId {
+            return true
+        }
+
+        // Show if time gap is > 2 minutes
+        let timeGap = currentMessage.timestamp.timeIntervalSince(previous.timestamp)
+        if timeGap > 120 { // 2 minutes in seconds
+            return true
+        }
+
+        // Otherwise, don't show (smart grouping)
+        return false
+    }
+
+    /// Determines if sender avatar should be shown for a message (WhatsApp-style: avatar on LAST message)
+    /// - Parameters:
+    ///   - currentMessage: The message to check
+    ///   - nextMessage: The next message in the list
+    ///   - currentUserId: The current user's ID
+    /// - Returns: True if sender avatar should be shown
+    func shouldShowSenderAvatar(currentMessage: Message, nextMessage: Message?, currentUserId: String) -> Bool {
+        // Never show for current user's messages
+        if currentMessage.senderId == currentUserId {
+            return false
+        }
+
+        // Always show for last message (no next message)
+        guard let next = nextMessage else {
+            return true
+        }
+
+        // Show if next sender is different
+        if next.senderId != currentMessage.senderId {
+            return true
+        }
+
+        // Show if time gap to next message is > 2 minutes
+        let timeGap = next.timestamp.timeIntervalSince(currentMessage.timestamp)
+        if timeGap > 120 { // 2 minutes in seconds
+            return true
+        }
+
+        // Otherwise, don't show (smart grouping)
+        return false
     }
 
     // MARK: - Private Methods

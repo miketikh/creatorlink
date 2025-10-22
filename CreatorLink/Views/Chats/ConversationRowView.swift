@@ -22,6 +22,7 @@ struct ConversationRowView: View {
     @State private var presenceHandle: DatabaseHandle?
     @State private var typingHandle: DatabaseHandle?
     @State private var isOtherUserTyping = false
+    @State private var lastMessageSenderName: String?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -64,7 +65,7 @@ struct ConversationRowView: View {
                             statusIcon(for: status)
                         }
 
-                        Text(conversation.lastMessage)
+                        Text(formattedLastMessage)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .lineLimit(2)
@@ -202,6 +203,24 @@ struct ConversationRowView: View {
         DateFormatters.formatMessageTimestamp(conversation.lastMessageTime)
     }
 
+    private var formattedLastMessage: String {
+        // For group chats, prefix with sender name
+        if conversation.isGroupChat {
+            // Check if current user sent the last message
+            if let senderId = conversation.lastMessageSenderId, senderId == viewModel.currentUserId {
+                return "You: \(conversation.lastMessage)"
+            } else if let senderName = lastMessageSenderName {
+                return "\(senderName): \(conversation.lastMessage)"
+            } else {
+                // Fallback if sender name not loaded yet
+                return conversation.lastMessage
+            }
+        } else {
+            // For one-on-one chats, just show the message
+            return conversation.lastMessage
+        }
+    }
+
     // MARK: - Methods
 
     private func loadOtherUser() async {
@@ -212,6 +231,26 @@ struct ConversationRowView: View {
             if let otherUserId = otherUser?.id {
                 listenToPresence(userId: otherUserId)
             }
+        } else {
+            // For group chats, load the last message sender name
+            await fetchLastMessageSender()
+        }
+    }
+
+    private func fetchLastMessageSender() async {
+        // Skip if current user sent the message
+        guard let senderId = conversation.lastMessageSenderId,
+              senderId != viewModel.currentUserId else {
+            return
+        }
+
+        // Fetch sender profile
+        do {
+            let senderProfile = try await UserService.shared.fetchUser(userId: senderId)
+            lastMessageSenderName = senderProfile.displayName
+        } catch {
+            // Silently fail - will show message without sender prefix
+            lastMessageSenderName = nil
         }
     }
 

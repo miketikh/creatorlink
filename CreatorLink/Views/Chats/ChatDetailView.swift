@@ -208,6 +208,22 @@ struct ChatDetailView: View {
                         emptyMessagesView
                     } else {
                         ForEach(Array(viewModel.messages.enumerated()), id: \.element.id) { index, message in
+                            let previousMessage = index > 0 ? viewModel.messages[index - 1] : nil
+                            let nextMessage = index < viewModel.messages.count - 1 ? viewModel.messages[index + 1] : nil
+                            let currentUserId = AuthService.shared.currentUser?.uid ?? ""
+                            let showSenderInfo = viewModel.shouldShowSenderInfo(
+                                currentMessage: message,
+                                previousMessage: previousMessage,
+                                currentUserId: currentUserId
+                            )
+                            let showSenderAvatar = viewModel.shouldShowSenderAvatar(
+                                currentMessage: message,
+                                nextMessage: nextMessage,
+                                currentUserId: currentUserId
+                            )
+                            let senderName = viewModel.getSenderName(userId: message.senderId)
+                            let senderPhotoUrl = viewModel.getSenderPhotoUrl(userId: message.senderId)
+
                             VStack(spacing: 4) {
                                 // Show date separator if this is a new day
                                 if shouldShowDateSeparator(at: index) {
@@ -217,7 +233,12 @@ struct ChatDetailView: View {
                                 MessageBubbleView(
                                     message: message,
                                     isFromCurrentUser: viewModel.isFromCurrentUser(message),
-                                    showTimestamp: shouldShowTimestamp(at: index)
+                                    showTimestamp: shouldShowTimestamp(at: index),
+                                    isGroupChat: conversation.isGroupChat,
+                                    showSenderInfo: showSenderInfo,
+                                    showSenderAvatar: showSenderAvatar,
+                                    senderName: senderName,
+                                    senderPhotoUrl: senderPhotoUrl
                                 )
                             }
                             .id(message.id)
@@ -267,6 +288,13 @@ struct ChatDetailView: View {
             }
             .task {
                 await loadData()
+
+                // Pre-fetch all participant profiles for group chats
+                if conversation.isGroupChat {
+                    for participantId in conversation.participantIds {
+                        _ = await viewModel.fetchSenderProfile(userId: participantId)
+                    }
+                }
 
                 // Scroll to saved position or bottom AFTER messages load
                 if let savedPos = savedScrollPosition {
