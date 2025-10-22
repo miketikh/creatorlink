@@ -439,6 +439,47 @@ class ConversationService {
         }
     }
 
+    // MARK: - Mute Notifications
+
+    /// Toggles mute status for a conversation for a specific user
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - userId: The ID of the user toggling mute
+    ///   - isMuted: Whether to mute (true) or unmute (false)
+    func toggleMute(conversationId: String, userId: String, isMuted: Bool) async throws {
+        do {
+            let docRef = conversationsCollection.document(conversationId)
+            let document = try await docRef.getDocument()
+
+            guard document.exists,
+                  let conversation = try? document.data(as: Conversation.self) else {
+                throw ConversationError.invalidData
+            }
+
+            // Get current mutedBy array or initialize empty
+            var mutedBy = conversation.mutedBy ?? []
+
+            if isMuted {
+                // Add userId to mutedBy if not already present
+                if !mutedBy.contains(userId) {
+                    mutedBy.append(userId)
+                }
+            } else {
+                // Remove userId from mutedBy
+                mutedBy.removeAll { $0 == userId }
+            }
+
+            // Update Firestore
+            try await docRef.updateData([
+                "mutedBy": mutedBy
+            ])
+        } catch let error as ConversationError {
+            throw error
+        } catch {
+            throw ConversationError.updateFailed(error)
+        }
+    }
+
     // MARK: - Helper Methods
 
     /// Generates a placeholder URL for group avatars using UI Avatars API

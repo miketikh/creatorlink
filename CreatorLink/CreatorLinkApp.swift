@@ -209,20 +209,33 @@ struct ContentRootView: View {
         }
 
         do {
+            // Fetch conversation to determine if it's a group chat and check mute status
+            let conversation = try await ConversationService.shared.fetchConversation(conversationId: message.conversationId)
+
+            guard let conversation = conversation else {
+                return
+            }
+
+            // Check if conversation is muted by current user
+            if let mutedBy = conversation.mutedBy, mutedBy.contains(userId) {
+                // Conversation is muted - don't show notification
+                return
+            }
+
             // Fetch sender information
             let sender = try await UserService.shared.fetchUser(userId: message.senderId)
             let senderName = sender.displayName ?? "Someone"
 
-            // Fetch conversation to determine if it's a group chat
-            let conversation = try await ConversationService.shared.fetchConversation(conversationId: message.conversationId)
-            let isGroupChat = conversation?.isGroupChat ?? false
+            let isGroupChat = conversation.isGroupChat
+            let groupName = conversation.groupName
 
             // Trigger the notification
             NotificationManager.shared.showMessageNotification(
                 conversationId: message.conversationId,
                 senderName: senderName,
                 messageText: message.text,
-                isGroupChat: isGroupChat
+                isGroupChat: isGroupChat,
+                groupName: groupName
             )
         } catch {
             // Silently handle errors

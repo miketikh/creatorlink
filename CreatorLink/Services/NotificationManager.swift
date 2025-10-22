@@ -47,11 +47,31 @@ class NotificationManager {
     ///   - senderName: The display name of the message sender
     ///   - messageText: The text content of the message
     ///   - isGroupChat: Whether this is a group conversation
-    func showMessageNotification(conversationId: String, senderName: String, messageText: String, isGroupChat: Bool) {
+    ///   - groupName: The name of the group (required if isGroupChat is true)
+    func showMessageNotification(conversationId: String, senderName: String, messageText: String, isGroupChat: Bool, groupName: String? = nil) {
         // Create notification content
         let content = UNMutableNotificationContent()
-        content.title = senderName
-        content.body = messageText
+
+        // Format notification based on conversation type
+        if isGroupChat, let groupName = groupName {
+            // Group chat: Title = group name, Body = "{Sender}: {message text}"
+            content.title = groupName
+            content.body = "\(senderName): \(messageText)"
+
+            // Set thread identifier for grouping - all notifications from same conversation will group together
+            content.threadIdentifier = conversationId
+
+            // Set summary argument for better notification grouping summary
+            content.summaryArgument = groupName
+        } else {
+            // One-on-one: Title = sender name, Body = message text
+            content.title = senderName
+            content.body = messageText
+
+            // Set thread identifier for one-on-one chats as well
+            content.threadIdentifier = conversationId
+        }
+
         content.sound = .default
 
         // Increment badge count
@@ -67,9 +87,11 @@ class NotificationManager {
         // Create trigger for immediate delivery
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
 
-        // Create notification request with unique identifier
+        // Create notification request
+        // Use conversationId as base for identifier so notifications from same conversation replace/group together
+        let identifier = isGroupChat ? "group-\(conversationId)-\(UUID().uuidString)" : "chat-\(conversationId)-\(UUID().uuidString)"
         let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
+            identifier: identifier,
             content: content,
             trigger: trigger
         )

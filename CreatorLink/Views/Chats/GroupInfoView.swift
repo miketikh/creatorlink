@@ -309,6 +309,42 @@ struct GroupInfoView: View {
 
     private var actionsSection: some View {
         VStack(spacing: 16) {
+            // Mute Notifications Toggle
+            VStack(alignment: .leading, spacing: 12) {
+                Text("NOTIFICATIONS")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fontWeight(.semibold)
+
+                Toggle(isOn: Binding(
+                    get: {
+                        guard let mutedBy = conversation.mutedBy,
+                              let currentUserId = UserService.shared.currentUserId else {
+                            return false
+                        }
+                        return mutedBy.contains(currentUserId)
+                    },
+                    set: { newValue in
+                        Task {
+                            await toggleMuteNotifications(isMuted: newValue)
+                        }
+                    }
+                )) {
+                    HStack {
+                        Image(systemName: "bell.slash.fill")
+                            .foregroundColor(.secondary)
+                        Text("Mute Notifications")
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(.systemGray4), lineWidth: 0.5)
+                )
+            }
+
             // Add Participants button
             Button {
                 showAddParticipants = true
@@ -404,6 +440,21 @@ struct GroupInfoView: View {
         } catch {
             // Error is shown via viewModel.errorMessage
             participantToRemove = nil
+        }
+    }
+
+    private func toggleMuteNotifications(isMuted: Bool) async {
+        guard let conversationId = conversation.id,
+              let userId = UserService.shared.currentUserId else { return }
+
+        do {
+            try await ConversationService.shared.toggleMute(
+                conversationId: conversationId,
+                userId: userId,
+                isMuted: isMuted
+            )
+        } catch {
+            viewModel.errorMessage = "Failed to update notification settings"
         }
     }
 

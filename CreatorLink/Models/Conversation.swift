@@ -19,9 +19,10 @@ struct Conversation: Identifiable, Codable, Hashable {
     let lastMessageSenderId: String? // ID of user who sent the last message
     let lastMessageStatus: MessageStatus? // Status of the last message
     let unreadCounts: [String: Int]? // Denormalized unread count per user (userId: count)
+    let mutedBy: [String]?          // Array of user IDs who have muted this conversation
 
     // Custom initializer for manual construction
-    init(id: String? = nil, participantIds: [String], lastMessage: String, lastMessageTime: Date, isGroupChat: Bool, groupName: String?, groupImageUrl: String? = nil, lastMessageSenderId: String? = nil, lastMessageStatus: MessageStatus? = nil, unreadCounts: [String: Int]? = nil) {
+    init(id: String? = nil, participantIds: [String], lastMessage: String, lastMessageTime: Date, isGroupChat: Bool, groupName: String?, groupImageUrl: String? = nil, lastMessageSenderId: String? = nil, lastMessageStatus: MessageStatus? = nil, unreadCounts: [String: Int]? = nil, mutedBy: [String]? = nil) {
         self.id = id
         self.participantIds = participantIds
         self.lastMessage = lastMessage
@@ -32,6 +33,7 @@ struct Conversation: Identifiable, Codable, Hashable {
         self.lastMessageSenderId = lastMessageSenderId
         self.lastMessageStatus = lastMessageStatus
         self.unreadCounts = unreadCounts
+        self.mutedBy = mutedBy
     }
 
     enum CodingKeys: String, CodingKey {
@@ -45,6 +47,7 @@ struct Conversation: Identifiable, Codable, Hashable {
         case lastMessageSenderId
         case lastMessageStatus
         case unreadCounts
+        case mutedBy
     }
 
     // Hashable conformance - include ALL properties that affect UI rendering (per ios_dev_notes.md)
@@ -71,6 +74,14 @@ struct Conversation: Identifiable, Codable, Hashable {
             unreadCountsEqual = lhs.unreadCounts == nil && rhs.unreadCounts == nil
         }
 
+        // Compare mutedBy arrays
+        let mutedByEqual: Bool
+        if let lhsMuted = lhs.mutedBy, let rhsMuted = rhs.mutedBy {
+            mutedByEqual = lhsMuted == rhsMuted
+        } else {
+            mutedByEqual = lhs.mutedBy == nil && rhs.mutedBy == nil
+        }
+
         return lhs.id == rhs.id &&
                lhs.participantIds == rhs.participantIds &&
                lhs.lastMessage == rhs.lastMessage &&
@@ -80,6 +91,7 @@ struct Conversation: Identifiable, Codable, Hashable {
                lhs.groupImageUrl == rhs.groupImageUrl &&
                lhs.lastMessageSenderId == rhs.lastMessageSenderId &&
                lhs.lastMessageStatus == rhs.lastMessageStatus &&
-               unreadCountsEqual
+               unreadCountsEqual &&
+               mutedByEqual
     }
 }
