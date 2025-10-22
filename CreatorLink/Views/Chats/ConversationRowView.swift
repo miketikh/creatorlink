@@ -25,6 +25,7 @@ struct ConversationRowView: View {
     @State private var lastMessageSenderName: String?
     @State private var typingIndicatorText: String = ""
     @State private var typingUserProfiles: [String: UserProfile] = [:]
+    @State private var lastMessageReadCount: Int?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -64,7 +65,13 @@ struct ConversationRowView: View {
                         if let senderId = conversation.lastMessageSenderId,
                            senderId == viewModel.currentUserId,
                            let status = conversation.lastMessageStatus {
-                            statusIcon(for: status)
+                            if conversation.isGroupChat, let readCount = lastMessageReadCount {
+                                // Show read count for group chats
+                                groupStatusIcon(readCount: readCount)
+                            } else {
+                                // Show regular status for one-on-one
+                                statusIcon(for: status)
+                            }
                         }
 
                         Text(formattedLastMessage)
@@ -100,6 +107,7 @@ struct ConversationRowView: View {
         .task {
             await loadOtherUser()
             await loadUnreadCount()
+            await loadLastMessageReadCount()
             setupTypingListener()
         }
         .onAppear {
@@ -269,6 +277,31 @@ struct ConversationRowView: View {
         DateFormatters.formatLastOnline(date)
     }
 
+    private func loadLastMessageReadCount() async {
+        // Only calculate read count for group chats where current user sent the last message
+        guard conversation.isGroupChat,
+              let senderId = conversation.lastMessageSenderId,
+              senderId == viewModel.currentUserId,
+              let conversationId = conversation.id else {
+            return
+        }
+
+        // Fetch the last message to get readBy data
+        do {
+            if let currentUserId = viewModel.currentUserId {
+                let messages = try await MessageService.shared.fetchMessages(conversationId: conversationId, userId: currentUserId)
+                if let lastMessage = messages.last {
+                    // Calculate read count (excluding current user)
+                    let readCount = lastMessage.readBy.keys.filter { $0 != currentUserId }.count
+                    lastMessageReadCount = readCount
+                }
+            }
+        } catch {
+            // Silently fail - will show regular status icon
+            lastMessageReadCount = nil
+        }
+    }
+
     private func statusIcon(for status: MessageStatus) -> some View {
         Group {
             switch status {
@@ -289,6 +322,27 @@ struct ConversationRowView: View {
                     .font(.caption2)
                     .foregroundColor(.blue)
             }
+        }
+    }
+
+    private func groupStatusIcon(readCount: Int) -> some View {
+        HStack(spacing: 2) {
+            // Double checkmark
+            ZStack {
+                Image(systemName: "checkmark")
+                    .font(.caption2)
+                    .foregroundColor(readCount > 0 ? .blue : .gray)
+                    .offset(x: -1)
+                Image(systemName: "checkmark")
+                    .font(.caption2)
+                    .foregroundColor(readCount > 0 ? .blue : .gray)
+                    .offset(x: 1)
+            }
+
+            // Read count
+            Text("\(readCount)")
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
         }
     }
 

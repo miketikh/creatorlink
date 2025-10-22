@@ -28,6 +28,7 @@ struct ChatDetailView: View {
     @State private var scrollProxy: ScrollViewProxy? = nil
     @State private var unreadMessagesCount: Int = 0
     @State private var showGroupInfo = false
+    @State private var selectedMessageForDetails: Message?
     @FocusState private var isInputFocused: Bool
 
     // Computed property to get the live conversation from ViewModel
@@ -219,6 +220,13 @@ struct ChatDetailView: View {
                 GroupInfoView(conversation: conversation)
             }
         }
+        .sheet(item: $selectedMessageForDetails) { message in
+            // Get participant profiles for the message
+            let participantProfiles = conversation.participantIds.compactMap { userId in
+                viewModel.senderProfiles[userId]
+            }
+            MessageReadDetailsView(message: message, participants: participantProfiles)
+        }
     }
 
     // MARK: - Subviews
@@ -257,6 +265,17 @@ struct ChatDetailView: View {
                             let senderName = viewModel.getSenderName(userId: message.senderId)
                             let senderPhotoUrl = viewModel.getSenderPhotoUrl(userId: message.senderId)
 
+                            // Calculate read counts for group messages from current user
+                            let readCount = (conversation.isGroupChat && viewModel.isFromCurrentUser(message))
+                                ? viewModel.calculateReadCount(message: message, currentUserId: currentUserId)
+                                : nil
+                            let deliveredCount = (conversation.isGroupChat && viewModel.isFromCurrentUser(message))
+                                ? viewModel.calculateDeliveredCount(message: message, currentUserId: currentUserId)
+                                : nil
+                            let totalParticipants = conversation.isGroupChat
+                                ? viewModel.getTotalParticipantCount(conversation: conversation, currentUserId: currentUserId)
+                                : nil
+
                             VStack(spacing: 4) {
                                 // Show date separator if this is a new day
                                 if shouldShowDateSeparator(at: index) {
@@ -271,7 +290,16 @@ struct ChatDetailView: View {
                                     showSenderInfo: showSenderInfo,
                                     showSenderAvatar: showSenderAvatar,
                                     senderName: senderName,
-                                    senderPhotoUrl: senderPhotoUrl
+                                    senderPhotoUrl: senderPhotoUrl,
+                                    readCount: readCount,
+                                    deliveredCount: deliveredCount,
+                                    totalParticipants: totalParticipants,
+                                    onTapStatusIndicator: {
+                                        // Only allow tapping for group messages from current user
+                                        if conversation.isGroupChat && viewModel.isFromCurrentUser(message) {
+                                            selectedMessageForDetails = message
+                                        }
+                                    }
                                 )
                             }
                             .id(message.id)

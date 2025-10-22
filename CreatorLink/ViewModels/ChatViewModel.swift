@@ -304,6 +304,50 @@ class ChatViewModel {
         return false
     }
 
+    // MARK: - Read Count Methods
+
+    /// Calculates the number of participants who have read a message (excluding sender)
+    /// - Parameters:
+    ///   - message: The message to calculate read count for
+    ///   - currentUserId: The current user's ID (sender)
+    /// - Returns: Count of participants who have read the message
+    func calculateReadCount(message: Message, currentUserId: String) -> Int {
+        // Get the readBy dictionary which maps userId -> timestamp
+        let readBy = message.readBy
+
+        // Count entries excluding the current user (sender doesn't "read" their own message)
+        let readCount = readBy.keys.filter { $0 != currentUserId }.count
+
+        return readCount
+    }
+
+    /// Calculates the number of participants who have received the message (excluding sender)
+    /// - Parameters:
+    ///   - message: The message to calculate delivered count for
+    ///   - currentUserId: The current user's ID (sender)
+    /// - Returns: Count of participants who have received the message
+    func calculateDeliveredCount(message: Message, currentUserId: String) -> Int {
+        // For now, return a simplified count based on message status
+        // Future enhancement: track per-user delivery status
+        switch message.status {
+        case .sending, .sent:
+            return 0
+        case .delivered, .read:
+            // For delivered/read, assume all participants have received it
+            let totalParticipants = message.participantIds.count - 1 // Exclude sender
+            return totalParticipants
+        }
+    }
+
+    /// Gets the total number of participants in a conversation (excluding current user)
+    /// - Parameters:
+    ///   - conversation: The conversation
+    ///   - currentUserId: The current user's ID
+    /// - Returns: Count of other participants
+    func getTotalParticipantCount(conversation: Conversation, currentUserId: String) -> Int {
+        return conversation.participantIds.filter { $0 != currentUserId }.count
+    }
+
     // MARK: - Typing Indicator Methods
 
     /// Formats typing indicator text for display
