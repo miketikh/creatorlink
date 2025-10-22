@@ -9,6 +9,7 @@ import SwiftUI
 import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
+import UserNotifications
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
@@ -18,7 +19,41 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize auth service after Firebase is configured
         AuthService.shared.ensureInitialized()
 
+        // Set notification center delegate
+        UNUserNotificationCenter.current().delegate = self
+
         return true
+    }
+}
+
+// MARK: - UNUserNotificationCenterDelegate
+
+extension AppDelegate: UNUserNotificationCenterDelegate {
+    /// Called when a notification is delivered while the app is in the foreground
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Show notifications even when app is in foreground
+        completionHandler([.banner, .sound, .badge])
+    }
+
+    /// Called when the user taps on a notification
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+
+        // Extract conversationId from notification payload
+        if let conversationId = userInfo["conversationId"] as? String {
+            print("[NotificationDelegate] User tapped notification for conversation: \(conversationId)")
+            // TODO: Navigate to conversation - implement in Phase 3
+        }
+
+        completionHandler()
     }
 }
 

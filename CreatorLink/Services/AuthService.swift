@@ -98,6 +98,12 @@ class AuthService {
             // Don't throw - allow sign-in to complete even if profile creation fails
         }
 
+        // Request notification permission after successful sign-in
+        // Run in background - don't block sign-in flow
+        Task {
+            _ = await NotificationManager.shared.requestPermission()
+        }
+
         return authResult.user
     }
 
