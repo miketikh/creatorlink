@@ -58,8 +58,22 @@ struct ChatDetailView: View {
             messagesScrollView
 
             // Typing indicator (positioned above input)
-            if !viewModel.typingUserNames.isEmpty {
-                TypingIndicatorView(typingUserNames: viewModel.typingUserNames)
+            if !viewModel.typingUserIds.isEmpty {
+                let currentUserId = AuthService.shared.currentUser?.uid ?? ""
+                let formattedText = viewModel.formatTypingIndicatorText(
+                    typingUserIds: viewModel.typingUserIds,
+                    currentUserId: currentUserId
+                )
+                let avatars = viewModel.getTypingUserAvatars(typingUserIds: viewModel.typingUserIds)
+
+                if !formattedText.isEmpty {
+                    TypingIndicatorView(
+                        typingUserNames: viewModel.typingUserNames,
+                        typingUserAvatars: avatars,
+                        isGroupChat: conversation.isGroupChat,
+                        formattedText: formattedText
+                    )
+                }
             }
 
             // Input area

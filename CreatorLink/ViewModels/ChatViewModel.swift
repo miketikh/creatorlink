@@ -304,6 +304,68 @@ class ChatViewModel {
         return false
     }
 
+    // MARK: - Typing Indicator Methods
+
+    /// Formats typing indicator text for display
+    /// - Parameters:
+    ///   - typingUserIds: Array of user IDs currently typing
+    ///   - currentUserId: The current user's ID (to filter out)
+    /// - Returns: Formatted string for typing indicator
+    func formatTypingIndicatorText(typingUserIds: [String], currentUserId: String) -> String {
+        // Filter out current user
+        let otherTypingUsers = typingUserIds.filter { $0 != currentUserId }
+
+        // Return empty string if no one else is typing
+        guard !otherTypingUsers.isEmpty else {
+            return ""
+        }
+
+        // Fetch display names for typing users from cache
+        var displayNames: [String] = []
+        for userId in otherTypingUsers {
+            let name = getSenderName(userId: userId)
+            displayNames.append(name)
+        }
+
+        // Format based on count
+        switch displayNames.count {
+        case 0:
+            return ""
+        case 1:
+            return "\(displayNames[0]) is typing..."
+        case 2:
+            return "\(displayNames[0]) and \(displayNames[1]) are typing..."
+        default:
+            let othersCount = displayNames.count - 2
+            return "\(displayNames[0]), \(displayNames[1]), and \(othersCount) \(othersCount == 1 ? "other" : "others") are typing..."
+        }
+    }
+
+    /// Determines if typing indicator should be shown
+    /// - Parameter typingUsers: Array of user IDs currently typing
+    /// - Returns: True if indicator should be shown
+    func shouldShowTypingIndicator(typingUsers: [String]) -> Bool {
+        return !typingUsers.isEmpty
+    }
+
+    /// Gets avatar URLs for typing users (up to 3)
+    /// - Parameter typingUserIds: Array of user IDs currently typing
+    /// - Returns: Array of photo URLs
+    func getTypingUserAvatars(typingUserIds: [String]) -> [String] {
+        var avatars: [String] = []
+
+        // Get up to 3 avatars
+        let usersToShow = Array(typingUserIds.prefix(3))
+
+        for userId in usersToShow {
+            if let photoUrl = getSenderPhotoUrl(userId: userId) {
+                avatars.append(photoUrl)
+            }
+        }
+
+        return avatars
+    }
+
     // MARK: - Private Methods
 
     private func setupMessageListener() {

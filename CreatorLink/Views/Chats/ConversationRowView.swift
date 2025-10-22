@@ -23,6 +23,8 @@ struct ConversationRowView: View {
     @State private var typingHandle: DatabaseHandle?
     @State private var isOtherUserTyping = false
     @State private var lastMessageSenderName: String?
+    @State private var typingIndicatorText: String = ""
+    @State private var typingUserProfiles: [String: UserProfile] = [:]
 
     var body: some View {
         HStack(spacing: 12) {
@@ -52,7 +54,7 @@ struct ConversationRowView: View {
 
                 // Show typing indicator or last message
                 if isOtherUserTyping {
-                    Text("typing...")
+                    Text(typingIndicatorText.isEmpty ? "typing..." : typingIndicatorText)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .italic()
@@ -337,7 +339,63 @@ struct ConversationRowView: View {
             Task { @MainActor in
                 // Update typing state - we only care if ANYONE else is typing
                 self.isOtherUserTyping = !typingUserIds.isEmpty
+
+                // For group chats, format the typing indicator with names
+                if self.conversation.isGroupChat && !typingUserIds.isEmpty {
+                    await self.updateTypingIndicatorText(typingUserIds: typingUserIds, currentUserId: currentUserId)
+                } else {
+                    // For one-on-one chats, keep it simple
+                    self.typingIndicatorText = ""
+                }
             }
+        }
+    }
+
+    /// Updates the typing indicator text with formatted user names
+    private func updateTypingIndicatorText(typingUserIds: [String], currentUserId: String) async {
+        // Filter out current user
+        let otherTypingUsers = typingUserIds.filter { $0 != currentUserId }
+
+        guard !otherTypingUsers.isEmpty else {
+            typingIndicatorText = ""
+            return
+        }
+
+        // Fetch user profiles for typing users
+        var displayNames: [String] = []
+        for userId in otherTypingUsers {
+            // Check cache first
+            if let cachedProfile = typingUserProfiles[userId] {
+                displayNames.append(cachedProfile.displayName)
+            } else {
+                // Fetch and cache the profile
+                do {
+                    let profile = try await UserService.shared.fetchUser(userId: userId)
+                    typingUserProfiles[userId] = profile
+                    displayNames.append(profile.displayName)
+                } catch {
+                    // Silently fail - use fallback name
+                    displayNames.append("Someone")
+                }
+            }
+        }
+
+        // Format based on count
+        typingIndicatorText = formatTypingIndicatorText(displayNames: displayNames)
+    }
+
+    /// Formats typing indicator text based on number of typers
+    private func formatTypingIndicatorText(displayNames: [String]) -> String {
+        switch displayNames.count {
+        case 0:
+            return ""
+        case 1:
+            return "\(displayNames[0]) is typing..."
+        case 2:
+            return "\(displayNames[0]) and \(displayNames[1]) are typing..."
+        default:
+            let othersCount = displayNames.count - 2
+            return "\(displayNames[0]), \(displayNames[1]), and \(othersCount) \(othersCount == 1 ? "other" : "others") are typing..."
         }
     }
 }
