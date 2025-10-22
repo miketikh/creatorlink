@@ -44,6 +44,10 @@ Convert the PRD or feature description into a structured task list document that
 - Aim for 3-8 tasks per PR (if more, consider splitting)
 - Each PR should deliver testable value
 
+### File Size
+
+- Files should never be too long. If you're approaching 400 lines in the file, finish the PRs for the current Phase, then report back to the orchestrator, telling them "I wrote the tasks for phases a - b, start a new executor at the next phase," along with some context of what you added.
+
 ### Task Quality
 - Use action verbs (Add, Create, Update, Implement, Fix)
 - Be specific and testable (avoid vague tasks like "Set up infrastructure")

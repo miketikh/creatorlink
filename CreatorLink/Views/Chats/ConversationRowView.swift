@@ -126,27 +126,37 @@ struct ConversationRowView: View {
 
     private var profilePhoto: some View {
         Group {
-            // Supports both Google profile photos and generated avatars (UI Avatars API)
-            if let photoURL = otherUser?.photoURL, let url = URL(string: photoURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .empty:
-                        ProgressView()
-                            .frame(width: 50, height: 50)
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 50, height: 50)
-                            .clipShape(Circle())
-                    case .failure:
-                        placeholderImage
-                    @unknown default:
-                        placeholderImage
-                    }
-                }
+            if conversation.isGroupChat {
+                // Show group avatar for group chats
+                GroupAvatarView(
+                    groupImageUrl: conversation.groupImageUrl,
+                    participantIds: conversation.participantIds,
+                    size: 50
+                )
             } else {
-                placeholderImage
+                // Show single user photo for one-on-one chats
+                // Supports both Google profile photos and generated avatars (UI Avatars API)
+                if let photoURL = otherUser?.photoURL, let url = URL(string: photoURL) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .empty:
+                            ProgressView()
+                                .frame(width: 50, height: 50)
+                        case .success(let image):
+                            image
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 50, height: 50)
+                                .clipShape(Circle())
+                        case .failure:
+                            placeholderImage
+                        @unknown default:
+                            placeholderImage
+                        }
+                    }
+                } else {
+                    placeholderImage
+                }
             }
         }
     }

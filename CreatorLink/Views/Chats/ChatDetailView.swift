@@ -70,28 +70,43 @@ struct ChatDetailView: View {
         .toolbar {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
-                    // Profile photo
-                    // Supports both Google profile photos and generated avatars (UI Avatars API)
-                    if let photoURL = otherUser?.photoURL, let url = URL(string: photoURL) {
-                        AsyncImage(url: url) { image in
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        } placeholder: {
-                            Circle()
-                                .fill(Color.blue.opacity(0.3))
+                    // Profile photo or group avatar
+                    if conversation.isGroupChat {
+                        // Show group avatar for group chats
+                        GroupAvatarView(
+                            groupImageUrl: conversation.groupImageUrl,
+                            participantIds: conversation.participantIds,
+                            size: 30
+                        )
+                    } else {
+                        // Show user photo for one-on-one chats
+                        // Supports both Google profile photos and generated avatars (UI Avatars API)
+                        if let photoURL = otherUser?.photoURL, let url = URL(string: photoURL) {
+                            AsyncImage(url: url) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                            } placeholder: {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.3))
+                            }
+                            .frame(width: 30, height: 30)
+                            .clipShape(Circle())
                         }
-                        .frame(width: 30, height: 30)
-                        .clipShape(Circle())
                     }
 
-                    // Name and online status
+                    // Name and status/participant count
                     VStack(alignment: .leading, spacing: 2) {
                         Text(navigationTitle)
                             .font(.headline)
 
-                        // Show online status or last seen
-                        if !conversation.isGroupChat {
+                        if conversation.isGroupChat {
+                            // Show participant count for groups
+                            Text("\(conversation.participantIds.count) members")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        } else {
+                            // Show online status or last seen for one-on-one
                             if isOnline {
                                 Text("Active now")
                                     .font(.caption2)
