@@ -15,17 +15,19 @@ struct Conversation: Identifiable, Codable, Hashable {
     let lastMessageTime: Date
     let isGroupChat: Bool
     let groupName: String?          // Optional group name for group chats
+    let groupImageUrl: String?      // Optional custom image URL for group chats
     let lastMessageSenderId: String? // ID of user who sent the last message
     let lastMessageStatus: MessageStatus? // Status of the last message
 
     // Custom initializer for manual construction
-    init(id: String? = nil, participantIds: [String], lastMessage: String, lastMessageTime: Date, isGroupChat: Bool, groupName: String?, lastMessageSenderId: String? = nil, lastMessageStatus: MessageStatus? = nil) {
+    init(id: String? = nil, participantIds: [String], lastMessage: String, lastMessageTime: Date, isGroupChat: Bool, groupName: String?, groupImageUrl: String? = nil, lastMessageSenderId: String? = nil, lastMessageStatus: MessageStatus? = nil) {
         self.id = id
         self.participantIds = participantIds
         self.lastMessage = lastMessage
         self.lastMessageTime = lastMessageTime
         self.isGroupChat = isGroupChat
         self.groupName = groupName
+        self.groupImageUrl = groupImageUrl
         self.lastMessageSenderId = lastMessageSenderId
         self.lastMessageStatus = lastMessageStatus
     }
@@ -37,6 +39,7 @@ struct Conversation: Identifiable, Codable, Hashable {
         case lastMessageTime
         case isGroupChat
         case groupName
+        case groupImageUrl
         case lastMessageSenderId
         case lastMessageStatus
     }

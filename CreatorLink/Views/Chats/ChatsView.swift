@@ -12,6 +12,7 @@ import SwiftUI
 struct ChatsView: View {
     @State private var viewModel = ConversationsViewModel()
     @State private var showingNewConversation = false
+    @State private var showNewGroupSheet = false
     @State private var selectedConversation: Conversation?
     @State private var scrollPositions: [String: String] = [:] // conversationId -> messageId
     @State private var navigationCoordinator = NavigationCoordinator.shared
@@ -30,8 +31,18 @@ struct ChatsView: View {
             .navigationTitle("Chats")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showingNewConversation = true
+                    Menu {
+                        Button {
+                            showingNewConversation = true
+                        } label: {
+                            Label("New Message", systemImage: "message")
+                        }
+
+                        Button {
+                            showNewGroupSheet = true
+                        } label: {
+                            Label("New Group", systemImage: "person.2.fill")
+                        }
                     } label: {
                         Image(systemName: "square.and.pencil")
                     }
@@ -42,6 +53,9 @@ struct ChatsView: View {
                     showingNewConversation = false
                     selectedConversation = conversation
                 })
+            }
+            .sheet(isPresented: $showNewGroupSheet) {
+                NewGroupConversationView()
             }
             .navigationDestination(item: $selectedConversation) { conversation in
                 ChatDetailView(

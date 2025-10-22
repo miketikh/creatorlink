@@ -22,8 +22,10 @@ class ConversationService {
     /// Creates a new conversation or returns existing one if it already exists
     /// - Parameter participantIds: Array of user IDs participating in the conversation
     /// - Parameter currentUserId: The ID of the current user
+    /// - Parameter groupName: Optional custom name for group conversations
+    /// - Parameter groupImageUrl: Optional custom image URL for group conversations
     /// - Returns: The created or existing Conversation
-    func createConversation(participantIds: [String], currentUserId: String) async throws -> Conversation {
+    func createConversation(participantIds: [String], currentUserId: String, groupName: String? = nil, groupImageUrl: String? = nil) async throws -> Conversation {
         // Check if conversation already exists
         if let existingConversation = try await findExistingConversation(participantIds: participantIds, currentUserId: currentUserId) {
             return existingConversation
@@ -31,12 +33,26 @@ class ConversationService {
 
         // Create new conversation
         let isGroupChat = participantIds.count > 2
+
+        // Determine final groupImageUrl to use
+        let finalGroupImageUrl: String?
+        if let customUrl = groupImageUrl {
+            finalGroupImageUrl = customUrl
+        } else if isGroupChat, let name = groupName {
+            finalGroupImageUrl = generateGroupPlaceholderUrl(groupName: name)
+        } else if isGroupChat {
+            finalGroupImageUrl = generateGroupPlaceholderUrl(groupName: "Group")
+        } else {
+            finalGroupImageUrl = nil
+        }
+
         let conversationData: [String: Any] = [
             "participantIds": participantIds.sorted(), // Sort for consistent lookups
             "lastMessage": "",
             "lastMessageTime": Timestamp(date: Date()),
             "isGroupChat": isGroupChat,
-            "groupName": NSNull()
+            "groupName": groupName ?? NSNull(),
+            "groupImageUrl": finalGroupImageUrl ?? NSNull()
         ]
 
         do {
@@ -48,7 +64,8 @@ class ConversationService {
                 lastMessage: "",
                 lastMessageTime: Date(),
                 isGroupChat: isGroupChat,
-                groupName: nil
+                groupName: groupName,
+                groupImageUrl: finalGroupImageUrl
             )
 
             return conversation
@@ -207,6 +224,17 @@ class ConversationService {
         } catch {
             throw ConversationError.deletionFailed(error)
         }
+    }
+
+    // MARK: - Helper Methods
+
+    /// Generates a placeholder URL for group avatars using UI Avatars API
+    /// - Parameter groupName: The name of the group
+    /// - Returns: A URL string for the placeholder image
+    private func generateGroupPlaceholderUrl(groupName: String) -> String {
+        let firstLetter = String(groupName.prefix(1)).uppercased()
+        let encodedLetter = firstLetter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "G"
+        return "https://ui-avatars.com/api/?name=\(encodedLetter)&background=random"
     }
 }
 
