@@ -18,6 +18,7 @@ struct ProfileView: View {
             VStack(spacing: 20) {
                 if let user = authService.currentUser {
                     // Profile Photo
+                    // Supports both Google profile photos and generated avatars (UI Avatars API)
                     if let photoURL = user.photoURL {
                         AsyncImage(url: photoURL) { image in
                             image

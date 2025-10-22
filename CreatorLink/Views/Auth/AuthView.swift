@@ -11,6 +11,7 @@ struct AuthView: View {
     @State private var authService = AuthService.shared
     @State private var isSigningIn = false
     @State private var errorMessage: String?
+    @State private var showEmailAuth = false
 
     var body: some View {
         VStack(spacing: 30) {
@@ -68,9 +69,44 @@ struct AuthView: View {
             .disabled(isSigningIn)
             .padding(.horizontal, 40)
 
+            // OR divider
+            HStack {
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(.gray.opacity(0.3))
+                Text("OR")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Rectangle()
+                    .frame(height: 1)
+                    .foregroundColor(.gray.opacity(0.3))
+            }
+            .padding(.horizontal, 40)
+
+            // Sign in with Email Button
+            Button(action: {
+                showEmailAuth = true
+            }) {
+                HStack {
+                    Image(systemName: "envelope.fill")
+                        .font(.title2)
+                    Text("Sign in with Email")
+                        .fontWeight(.semibold)
+                }
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(Color.gray)
+                .foregroundColor(.white)
+                .cornerRadius(10)
+            }
+            .padding(.horizontal, 40)
+
             Spacer()
         }
         .padding()
+        .sheet(isPresented: $showEmailAuth) {
+            EmailAuthView(isPresented: $showEmailAuth)
+        }
     }
 
     private func signInWithGoogle() async {

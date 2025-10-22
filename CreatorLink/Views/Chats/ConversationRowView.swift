@@ -126,6 +126,7 @@ struct ConversationRowView: View {
 
     private var profilePhoto: some View {
         Group {
+            // Supports both Google profile photos and generated avatars (UI Avatars API)
             if let photoURL = otherUser?.photoURL, let url = URL(string: photoURL) {
                 AsyncImage(url: url) { phase in
                     switch phase {

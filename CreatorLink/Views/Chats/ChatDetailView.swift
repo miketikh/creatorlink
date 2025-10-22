@@ -3,6 +3,8 @@
 //  CreatorLink
 //
 //  Main chat interface showing message history and input field
+//  Note: User avatars support both Google profile photos and
+//  generated avatars (UI Avatars API)
 //
 
 import SwiftUI
@@ -69,6 +71,7 @@ struct ChatDetailView: View {
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
                     // Profile photo
+                    // Supports both Google profile photos and generated avatars (UI Avatars API)
                     if let photoURL = otherUser?.photoURL, let url = URL(string: photoURL) {
                         AsyncImage(url: url) { image in
                             image

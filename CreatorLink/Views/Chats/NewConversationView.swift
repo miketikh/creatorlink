@@ -131,6 +131,7 @@ struct UserRowView: View {
     var body: some View {
         HStack(spacing: 12) {
             // Profile photo
+            // Supports both Google profile photos and generated avatars (UI Avatars API)
             if let photoURL = user.photoURL, let url = URL(string: photoURL) {
                 AsyncImage(url: url) { phase in
                     switch phase {

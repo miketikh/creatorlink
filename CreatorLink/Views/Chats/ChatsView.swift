@@ -3,6 +3,8 @@
 //  CreatorLink
 //
 //  Main view for displaying conversation list
+//  Note: User avatars displayed by ConversationRowView support both
+//  Google profile photos and generated avatars (UI Avatars API)
 //
 
 import SwiftUI
