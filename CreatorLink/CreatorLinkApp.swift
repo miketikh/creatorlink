@@ -82,19 +82,21 @@ struct CreatorLinkApp: App {
         switch newPhase {
         case .active:
             // App entered foreground - set user online
+            // Clear badge, resume notification suppression for active conversation
             PresenceService.shared.cancelOfflineTimer()
             PresenceService.shared.setOnline(userId: userId)
-            // Clear badge when returning from background
             NotificationManager.shared.clearBadge()
 
         case .inactive:
             // App is temporarily inactive (e.g., receiving a phone call)
-            // Don't change presence yet
+            // No action needed - temporary state
             break
 
         case .background:
             // App entered background - set user offline after 30 second grace period
+            // Clear active conversation so notifications will show for new messages
             PresenceService.shared.setOffline(userId: userId, delay: 30)
+            NavigationCoordinator.shared.setActiveConversation(nil)
 
         @unknown default:
             break
@@ -201,9 +203,12 @@ struct ContentRootView: View {
     ///   - message: The message that was received
     ///   - userId: The current user's ID
     private func triggerNotificationForMessage(_ message: Message, userId: String) async {
-        do {
-            // TODO: Check if user is actively viewing this conversation (Phase 5)
+        // Suppress notification if user is actively viewing this conversation
+        if NavigationCoordinator.shared.activeConversationId == message.conversationId {
+            return
+        }
 
+        do {
             // Fetch sender information
             let sender = try await UserService.shared.fetchUser(userId: message.senderId)
             let senderName = sender.displayName ?? "Someone"

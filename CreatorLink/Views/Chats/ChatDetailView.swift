@@ -24,6 +24,7 @@ struct ChatDetailView: View {
     @State private var scrollPosition: String? = nil
     @State private var isNearBottom: Bool = true
     @State private var scrollProxy: ScrollViewProxy? = nil
+    @State private var unreadMessagesCount: Int = 0
     @FocusState private var isInputFocused: Bool
 
     // Computed property to get the live conversation from ViewModel
@@ -102,9 +103,41 @@ struct ChatDetailView: View {
                 }
             }
         }
+        .onChange(of: viewModel.messages) { oldMessages, newMessages in
+            // When new messages arrive while conversation is open
+            guard let currentUserId = AuthService.shared.currentUser?.uid else { return }
+
+            // Find new messages from OTHER users (not your own)
+            let oldIds = Set(oldMessages.map { $0.id })
+            let newMessagesFromOthers = newMessages.filter { message in
+                guard let messageId = message.id else { return false }
+                return !oldIds.contains(messageId) && message.senderId != currentUserId
+            }
+
+            if !newMessagesFromOthers.isEmpty {
+                // Auto-mark as read immediately (standard chat app behavior)
+                Task {
+                    await viewModel.markMessagesAsRead()
+                }
+
+                // Auto-scroll to bottom if user is already at bottom
+                if isNearBottom, let lastMessage = newMessages.last {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+                    }
+                } else {
+                    // User is scrolled up - increment by count of new messages from others
+                    unreadMessagesCount += newMessagesFromOthers.count
+                }
+            }
+        }
         .onAppear {
             // Set view as active to prevent auto-delivery race condition
             viewModel.isViewActive = true
+            // Track active conversation for notification suppression
+            if let conversationId = conversation.id {
+                NavigationCoordinator.shared.setActiveConversation(conversationId)
+            }
             // Also mark messages as read when view appears (handles navigation back)
             Task {
                 await markMessagesAsReadAndUpdateBadge()
@@ -113,6 +146,9 @@ struct ChatDetailView: View {
         .onDisappear {
             // Save scroll position before leaving
             onScrollPositionChanged(scrollPosition)
+
+            // Clear active conversation tracking
+            NavigationCoordinator.shared.setActiveConversation(nil)
 
             // Set view as inactive so auto-delivery can run for background messages
             viewModel.isViewActive = false
@@ -198,6 +234,10 @@ struct ChatDetailView: View {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     isNearBottom = newValue
                 }
+                // Reset unread counter when user scrolls to bottom
+                if newValue && !oldValue {
+                    unreadMessagesCount = 0
+                }
             }
             .onPreferenceChange(VisibleMessagePreferenceKey.self) { messages in
                 // Find the message closest to the top (smallest positive minY)
@@ -250,18 +290,33 @@ struct ChatDetailView: View {
             if !isNearBottom {
                 Button {
                     withAnimation(.easeInOut(duration: 0.3)) {
+                        // Reset unread counter when scrolling to bottom
+                        unreadMessagesCount = 0
                         if let lastMessage = viewModel.messages.last {
                             scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
                         }
                     }
                 } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color.blue)
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Color.blue)
+                            .clipShape(Circle())
+                            .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+
+                        // Badge showing unread count
+                        if unreadMessagesCount > 0 {
+                            Text("\(unreadMessagesCount)")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(6)
+                                .background(Color.red)
+                                .clipShape(Circle())
+                                .offset(x: 4, y: -4)
+                        }
+                    }
                 }
                 .padding(.trailing, 16)
                 .padding(.bottom, 16)

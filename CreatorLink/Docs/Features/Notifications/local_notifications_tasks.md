@@ -499,40 +499,62 @@ This phase adds smart behavior to suppress notifications when they're not needed
 
 ---
 
-### PR 5.2: Don't Notify When Conversation Is Open
+### PR 5.2: Don't Notify When Conversation Is Open + Show New Message Indicator
 
-**Goal:** Suppress notifications for messages in the conversation the user is actively viewing.
+**Goal:** Suppress notification banners when viewing a conversation, but show a visual indicator for new messages when scrolled up (like WhatsApp).
 
 **Tasks:**
+
+**Part A: Suppress notification banners for active conversation**
 - [ ] Open `CreatorLink/CreatorLinkApp.swift`
 - [ ] Locate `triggerNotificationForMessage` method
 - [ ] At the beginning of the method, add conversation check:
   - Check if `NavigationCoordinator.shared.activeConversationId == message.conversationId`
   - If true, return early without creating notification
-  - Add print statement for debugging: "Suppressing notification - user is viewing this conversation"
 - [ ] Keep the message delivery status update (shouldn't be affected)
+
+**Part B: Add new message indicator to scroll-to-bottom button**
+- [ ] Open `CreatorLink/Views/Chats/ChatDetailView.swift`
+- [ ] Add `@State private var unreadMessagesCount: Int = 0` to track new messages while scrolled up
+- [ ] Update `scrollToBottomButton` computed property:
+  - Add a badge/counter overlay when `unreadMessagesCount > 0`
+  - Display count text (e.g., "3 new") next to or on the down arrow
+  - Use .overlay or .badge modifier with white text on blue/green background
+- [ ] In the message listener (`.onChange` or similar that detects new messages):
+  - When a new message arrives AND user is not at bottom (`!isNearBottom`), increment `unreadMessagesCount`
+  - When user scrolls to bottom (tap button or scroll manually), reset `unreadMessagesCount = 0`
+- [ ] Update scroll-to-bottom button tap action:
+  - Reset `unreadMessagesCount = 0` when tapped
+  - Scroll to bottom as before
 
 **What to Test:**
 1. Open ChatDetailView for Conversation A
-2. From another device, send message to Conversation A
-3. Verify:
-   - Message appears in chat immediately (Firestore listener works)
+2. Scroll up so you're NOT at the bottom (`isNearBottom = false`)
+3. From another device, send 3 messages to Conversation A
+4. Verify:
+   - Messages appear in chat (Firestore listener works)
    - NO notification banner appears (suppressed)
    - Badge does not increment
-4. Navigate back to ChatsView (close ChatDetailView)
-5. Send another message from other device
+   - Scroll-to-bottom button shows "3" or "3 new" indicator
+5. Tap scroll-to-bottom button
 6. Verify:
+   - Scrolls to bottom
+   - New message indicator clears
+7. Navigate back to ChatsView, then send another message from other device
+8. Verify:
    - Notification banner DOES appear (conversation not active)
    - Badge increments
-7. Test with multiple conversations to ensure filtering works correctly
 
 **Files Changed:**
 - `CreatorLink/CreatorLinkApp.swift` - Add active conversation check in triggerNotificationForMessage
+- `CreatorLink/Views/Chats/ChatDetailView.swift` - Add unread message counter and update scroll button UI
 
 **Notes:**
-- Check conversation BEFORE fetching user/conversation data to save resources
-- This significantly improves UX - no annoying notifications while chatting
-- Message still gets delivered and marked as read - only notification is suppressed
+- Only show counter when user is scrolled up AND in active conversation
+- UX inspiration: WhatsApp shows "↓ 5 new messages" when scrolled up
+- Counter should be visually distinct but not intrusive
+- Reset counter on manual scroll to bottom OR button tap
+- Message still gets delivered and marked as read - only notification banner is suppressed
 
 ---
 
