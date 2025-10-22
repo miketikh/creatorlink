@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseAuth
+import FirebaseDatabase
 
 struct NewConversationView: View {
     @Environment(\.dismiss) private var dismiss
@@ -127,6 +128,8 @@ struct NewConversationView: View {
 
 struct UserRowView: View {
     let user: UserProfile
+    @State private var isOnline = false
+    @State private var presenceHandle: DatabaseHandle?
 
     var body: some View {
         HStack(spacing: 12) {
@@ -167,14 +170,20 @@ struct UserRowView: View {
 
             Spacer()
 
-            // Online indicator
-            if user.isOnline {
+            // Online indicator (real-time)
+            if isOnline {
                 Circle()
                     .fill(Color.green)
                     .frame(width: 12, height: 12)
             }
         }
         .padding(.vertical, 4)
+        .onAppear {
+            setupPresenceListener()
+        }
+        .onDisappear {
+            cleanupPresenceListener()
+        }
     }
 
     private var placeholderImage: some View {
@@ -196,6 +205,21 @@ struct UserRowView: View {
             return String(components[0].prefix(1) + components[1].prefix(1)).uppercased()
         } else {
             return String(user.displayName.prefix(1)).uppercased()
+        }
+    }
+
+    private func setupPresenceListener() {
+        presenceHandle = PresenceService.shared.listenToPresence(userId: user.id) { [self] online, _ in
+            Task { @MainActor in
+                self.isOnline = online
+            }
+        }
+    }
+
+    private func cleanupPresenceListener() {
+        if let handle = presenceHandle {
+            PresenceService.shared.removePresenceListener(userId: user.id, handle: handle)
+            presenceHandle = nil
         }
     }
 }
