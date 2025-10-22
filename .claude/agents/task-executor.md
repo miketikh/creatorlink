@@ -35,6 +35,7 @@ Execute tasks from task sheets with PRs or task lists. Work systematically throu
 - Use existing codebase patterns (check similar files first)
 - Mark tasks complete `[x]` immediately after finishing
 - Check for and use best practices. Do not make assumptions, if unsure, look up "how to do __ in ios 26 2025", or however you phrase it to get the best results
+- DO NOT add print or logging statements, unless explicitly asked to do so for debugging
 
 ## Completion Summary Format
 

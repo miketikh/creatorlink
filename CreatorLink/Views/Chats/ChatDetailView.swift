@@ -385,6 +385,13 @@ struct ChatDetailView: View {
 
         await viewModel.sendMessage(text: text)
 
+        // Scroll to bottom to show the new message
+        if let lastMessage = viewModel.messages.last {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                scrollProxy?.scrollTo(lastMessage.id, anchor: .bottom)
+            }
+        }
+
         // Optionally refocus the input field
         isInputFocused = true
     }

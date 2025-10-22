@@ -253,14 +253,14 @@ This phase implements navigation to the specific conversation when a user taps a
 **Goal:** Create a shared coordinator to manage deep link navigation from notifications.
 
 **Tasks:**
-- [ ] Create new file `NavigationCoordinator.swift` in Services directory
-- [ ] Import Foundation
-- [ ] Create `@Observable class NavigationCoordinator` with shared singleton
-- [ ] Add property `var deepLinkConversationId: String?` for tracking deep link target
-- [ ] Implement `handleNotificationTap(conversationId:)` method
+- [x] Create new file `NavigationCoordinator.swift` in Services directory
+- [x] Import Foundation
+- [x] Create `@Observable class NavigationCoordinator` with shared singleton
+- [x] Add property `var deepLinkConversationId: String?` for tracking deep link target
+- [x] Implement `handleNotificationTap(conversationId:)` method
   - Set `deepLinkConversationId` to provided conversationId
   - Print debug message with conversationId
-- [ ] Implement `clearDeepLink()` method
+- [x] Implement `clearDeepLink()` method
   - Set `deepLinkConversationId` back to nil
   - Called after navigation completes
 
@@ -285,13 +285,13 @@ This phase implements navigation to the specific conversation when a user taps a
 **Goal:** Connect notification taps to the NavigationCoordinator so deep links are triggered.
 
 **Tasks:**
-- [ ] Open `CreatorLink/CreatorLinkApp.swift`
-- [ ] Locate `userNotificationCenter(_:didReceive:)` delegate method in AppDelegate extension
-- [ ] Replace TODO comment with actual implementation
+- [x] Open `CreatorLink/CreatorLinkApp.swift`
+- [x] Locate `userNotificationCenter(_:didReceive:)` delegate method in AppDelegate extension
+- [x] Replace TODO comment with actual implementation
   - Extract conversationId from `userInfo["conversationId"]`
   - Use `await MainActor.run { }` to ensure UI updates on main thread
   - Call `NavigationCoordinator.shared.handleNotificationTap(conversationId: conversationId)`
-- [ ] Add error handling for missing conversationId
+- [x] Add error handling for missing conversationId
 
 **What to Test:**
 1. Send a message while app is backgrounded
@@ -315,14 +315,14 @@ This phase implements navigation to the specific conversation when a user taps a
 **Goal:** Listen for deep link changes and navigate to the target conversation.
 
 **Tasks:**
-- [ ] Open `CreatorLink/Views/Chats/ChatsView.swift`
-- [ ] Add state property: `@State private var navigationCoordinator = NavigationCoordinator.shared`
-- [ ] Add `.onChange(of: navigationCoordinator.deepLinkConversationId)` modifier to NavigationStack
+- [x] Open `CreatorLink/Views/Chats/ChatsView.swift`
+- [x] Add state property: `@State private var navigationCoordinator = NavigationCoordinator.shared`
+- [x] Add `.onChange(of: navigationCoordinator.deepLinkConversationId)` modifier to NavigationStack
   - Check if `newValue` is not nil
   - Find conversation in `viewModel.conversations` that matches conversationId
   - Set `selectedConversation` to found conversation
   - Call `navigationCoordinator.clearDeepLink()` after setting navigation
-- [ ] Handle case where conversation isn't in current list
+- [x] Handle case where conversation isn't in current list
   - Fetch conversation using `ConversationService.shared.fetchConversation(conversationId:)`
   - Add to selected conversation if found
   - Show error if conversation doesn't exist or user doesn't have access

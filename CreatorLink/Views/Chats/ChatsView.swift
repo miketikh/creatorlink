@@ -12,6 +12,7 @@ struct ChatsView: View {
     @State private var showingNewConversation = false
     @State private var selectedConversation: Conversation?
     @State private var scrollPositions: [String: String] = [:] // conversationId -> messageId
+    @State private var navigationCoordinator = NavigationCoordinator.shared
 
     var body: some View {
         NavigationStack {
@@ -64,6 +65,41 @@ struct ChatsView: View {
             } message: {
                 if let errorMessage = viewModel.errorMessage {
                     Text(errorMessage)
+                }
+            }
+            .onChange(of: navigationCoordinator.deepLinkConversationId) { oldValue, newValue in
+                handleDeepLink(conversationId: newValue)
+            }
+        }
+    }
+
+    // MARK: - Deep Link Handling
+
+    /// Handle deep link navigation to a specific conversation
+    private func handleDeepLink(conversationId: String?) {
+        guard let conversationId = conversationId else { return }
+
+        // Clear any saved scroll position for this conversation - we want to scroll to bottom
+        scrollPositions.removeValue(forKey: conversationId)
+
+        // First, try to find the conversation in the current list
+        if let conversation = viewModel.conversations.first(where: { $0.id == conversationId }) {
+            selectedConversation = conversation
+            navigationCoordinator.clearDeepLink()
+        } else {
+            // Conversation not in current list - fetch it
+            Task {
+                do {
+                    if let conversation = try await ConversationService.shared.fetchConversation(conversationId: conversationId) {
+                        selectedConversation = conversation
+                        navigationCoordinator.clearDeepLink()
+                    } else {
+                        viewModel.errorMessage = "Unable to open conversation. You may not have access to it."
+                        navigationCoordinator.clearDeepLink()
+                    }
+                } catch {
+                    viewModel.errorMessage = "Failed to open conversation: \(error.localizedDescription)"
+                    navigationCoordinator.clearDeepLink()
                 }
             }
         }

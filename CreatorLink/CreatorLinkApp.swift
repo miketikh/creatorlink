@@ -49,8 +49,10 @@ extension AppDelegate: UNUserNotificationCenterDelegate {
 
         // Extract conversationId from notification payload
         if let conversationId = userInfo["conversationId"] as? String {
-            print("[NotificationDelegate] User tapped notification for conversation: \(conversationId)")
-            // TODO: Navigate to conversation - implement in Phase 3
+            // Navigate to conversation using NavigationCoordinator
+            Task { @MainActor in
+                NavigationCoordinator.shared.handleNotificationTap(conversationId: conversationId)
+            }
         }
 
         completionHandler()
@@ -178,11 +180,11 @@ struct ContentRootView: View {
                                 // Trigger notification after successful delivery update
                                 await self.triggerNotificationForMessage(message, userId: userId)
                             } catch {
-                                print("[MessageListener] Error processing message: \(error.localizedDescription)")
+                                // Silently handle errors
                             }
                         }
                     } catch {
-                        print("[MessageListener] Error decoding message: \(error.localizedDescription)")
+                        // Silently handle decoding errors
                     }
                 }
             }
@@ -213,10 +215,8 @@ struct ContentRootView: View {
                 messageText: message.text,
                 isGroupChat: isGroupChat
             )
-
-            print("[Notification] Triggered notification for message from \(senderName)")
         } catch {
-            print("[Notification] Failed to trigger notification: \(error.localizedDescription)")
+            // Silently handle errors
         }
     }
 }

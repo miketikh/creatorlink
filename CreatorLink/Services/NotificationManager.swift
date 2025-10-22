@@ -26,10 +26,8 @@ class NotificationManager {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(
                 options: [.alert, .sound, .badge]
             )
-            print("[NotificationManager] Permission request result: \(granted ? "Granted" : "Denied")")
             return granted
         } catch {
-            print("[NotificationManager] Permission request failed: \(error.localizedDescription)")
             return false
         }
     }
@@ -78,11 +76,7 @@ class NotificationManager {
 
         // Schedule the notification
         UNUserNotificationCenter.current().add(request) { error in
-            if let error = error {
-                print("[NotificationManager] Failed to schedule notification: \(error.localizedDescription)")
-            } else {
-                print("[NotificationManager] Notification scheduled successfully for conversation: \(conversationId)")
-            }
+            // Silently handle errors
         }
     }
 }
