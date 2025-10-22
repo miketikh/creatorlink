@@ -79,4 +79,19 @@ class NotificationManager {
             // Silently handle errors
         }
     }
+
+    // MARK: - Badge Management
+
+    /// Update the app icon badge count
+    /// - Parameter count: The new badge count (use 0 to clear the badge)
+    func updateBadgeCount(_ count: Int) {
+        UNUserNotificationCenter.current().setBadgeCount(count) { error in
+            // Silently handle errors
+        }
+    }
+
+    /// Clear the app icon badge
+    func clearBadge() {
+        updateBadgeCount(0)
+    }
 }

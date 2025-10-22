@@ -8,6 +8,7 @@
 import SwiftUI
 import FirebaseAuth
 import FirebaseDatabase
+import UIKit
 
 struct ChatDetailView: View {
     let initialConversation: Conversation
@@ -106,7 +107,7 @@ struct ChatDetailView: View {
             viewModel.isViewActive = true
             // Also mark messages as read when view appears (handles navigation back)
             Task {
-                await viewModel.markMessagesAsRead()
+                await markMessagesAsReadAndUpdateBadge()
             }
         }
         .onDisappear {
@@ -217,7 +218,7 @@ struct ChatDetailView: View {
                 }
 
                 // Mark messages as read after initial load
-                await viewModel.markMessagesAsRead()
+                await markMessagesAsReadAndUpdateBadge()
             }
             .overlay(alignment: .bottomTrailing) {
                 scrollToBottomButton
@@ -345,6 +346,27 @@ struct ChatDetailView: View {
     }
 
     // MARK: - Methods
+
+    private func markMessagesAsReadAndUpdateBadge() async {
+        guard let currentUserId = AuthService.shared.currentUser?.uid else { return }
+
+        // Count unread messages before marking them as read
+        let unreadMessages = viewModel.messages.filter { message in
+            message.senderId != currentUserId &&
+            message.readBy[currentUserId] == nil
+        }
+        let unreadCount = unreadMessages.count
+
+        // Mark messages as read
+        await viewModel.markMessagesAsRead()
+
+        // Update badge count if there were unread messages
+        if unreadCount > 0 {
+            let currentBadge = UIApplication.shared.applicationIconBadgeNumber
+            let newBadge = max(0, currentBadge - unreadCount)
+            NotificationManager.shared.updateBadgeCount(newBadge)
+        }
+    }
 
     private func loadData() async {
         await viewModel.loadMessages()

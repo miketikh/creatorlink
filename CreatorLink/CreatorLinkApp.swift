@@ -84,6 +84,8 @@ struct CreatorLinkApp: App {
             // App entered foreground - set user online
             PresenceService.shared.cancelOfflineTimer()
             PresenceService.shared.setOnline(userId: userId)
+            // Clear badge when returning from background
+            NotificationManager.shared.clearBadge()
 
         case .inactive:
             // App is temporarily inactive (e.g., receiving a phone call)
@@ -124,6 +126,8 @@ struct ContentRootView: View {
                     if let userId = authService.currentUser?.uid {
                         PresenceService.shared.setupPresence(userId: userId)
                         setupGlobalMessageDeliveryListener(userId: userId)
+                        // Clear badge when app launches
+                        NotificationManager.shared.clearBadge()
                     }
                 }
                 .onDisappear {
