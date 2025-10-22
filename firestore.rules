@@ -1,68 +1,66 @@
-  rules_version = '2';
+rules_version = '2';
 
-  service cloud.firestore {
-    match /databases/{database}/documents {
+service cloud.firestore {
+  match /databases/{database}/documents {
 
-      // Helper functions
-      function isAuthenticated() {
-        return request.auth != null;
-      }
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
 
-      function isOwner(userId) {
-        return isAuthenticated() && request.auth.uid == userId;
-      }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
 
-      // Users collection
-      match /users/{userId} {
-        allow read: if isAuthenticated();
-        allow write: if isOwner(userId);
-      }
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
 
-      // Conversations collection
-      match /conversations/{conversationId} {
-        allow read: if isAuthenticated() &&
+    // Conversations collection
+    match /conversations/{conversationId} {
+      allow read: if isAuthenticated() &&
+                     request.auth.uid in resource.data.participantIds;
+
+      allow create: if isAuthenticated() &&
+                       request.auth.uid in request.resource.data.participantIds;
+
+      allow update: if isAuthenticated() &&
+                       (
+                         // Standard update: user is participant
+                         request.auth.uid in request.resource.data.participantIds
+                         ||
+                         // Allow users to remove themselves from groups
+                         (
+                           // Check that only participantIds and unreadCounts are being modified
+                           request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['participantIds', 'unreadCounts'])
+                           // User must currently be in the group
+                           && resource.data.participantIds.hasAll([request.auth.uid])
+                           // User is removing themselves (not present in new participantIds)
+                           && !request.resource.data.participantIds.hasAll([request.auth.uid])
+                           // User is only removing their own unreadCount entry
+                           && (!request.resource.data.keys().hasAny(['unreadCounts']) || !request.resource.data.unreadCounts.keys().hasAny([request.auth.uid]))
+                         )
+                       );
+
+      allow delete: if false;
+    }
+
+    // Messages collection
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() &&
+                     request.auth.uid in resource.data.participantIds;
+
+      allow create: if isAuthenticated() &&
+                       request.auth.uid == request.resource.data.senderId &&
+                       request.auth.uid in request.resource.data.participantIds;
+
+      allow update: if isAuthenticated() &&
                        request.auth.uid in resource.data.participantIds;
 
-        allow create, update: if isAuthenticated() &&
-                                 request.auth.uid in
-  request.resource.data.participantIds;
-
-        allow delete: if false;
-      }
-
-      // Messages collection
-      match /messages/{messageId} {
-          allow read: if isAuthenticated() &&
-                         request.auth.uid in resource.data.participantIds;
-
-          allow create: if isAuthenticated() &&
-                           request.auth.uid == request.resource.data.senderId &&
-                           request.auth.uid in request.resource.data.participantIds;
-
-          allow update: if isAuthenticated() &&
-                           request.auth.uid in resource.data.participantIds;
-
-          allow delete: if false;
-  		}
-      
-        match /conversations/{conversationId} {
-    allow update: if request.auth != null
-      && (
-        // Existing conditions for other updates...
-
-        // NEW: Allow users to remove themselves from groups
-        
-          // Check that only participantIds and unreadCounts are being modified
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['participantIds', 'unreadCounts'])
-          // User must currently be in the group
-          && resource.data.participantIds.hasAll([request.auth.uid])
-          // User is removing themselves (not present in new participantIds)
-          && !request.resource.data.participantIds.hasAll([request.auth.uid])
-          // User is only removing their own unreadCount entry
-          && (!request.resource.data.keys().hasAny(['unreadCounts']) || !request.resource.data.unreadCounts.keys().hasAny([request.auth.uid]))
-        
-      );
-  }
+      allow delete: if false;
     }
   }
+}

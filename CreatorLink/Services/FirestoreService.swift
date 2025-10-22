@@ -15,9 +15,8 @@ class FirestoreService {
     let db = Firestore.firestore()
 
     private init() {
-        // Configure Firestore settings if needed
-        let settings = FirestoreSettings()
-        db.settings = settings
+        // Firestore settings are configured in AppDelegate
+        // Do not override settings here to ensure emulator configuration works
     }
 
     // Collection references for easy access

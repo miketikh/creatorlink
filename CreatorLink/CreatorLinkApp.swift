@@ -16,6 +16,19 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         FirebaseApp.configure()
 
+        #if DEBUG
+        // Connect to Firebase Local Emulator Suite
+        // Connect Auth to emulator
+        Auth.auth().useEmulator(withHost: "127.0.0.1", port: 9099)
+
+        // Connect Firestore to emulator
+        let settings = Firestore.firestore().settings
+        settings.host = "127.0.0.1:8080"
+        settings.cacheSettings = MemoryCacheSettings()
+        settings.isSSLEnabled = false
+        Firestore.firestore().settings = settings
+        #endif
+
         // Initialize auth service after Firebase is configured
         AuthService.shared.ensureInitialized()
 
