@@ -34,9 +34,9 @@ const MESSAGE_TEMPLATES = [
   () => `How are you ${faker.helpers.arrayElement(['doing', 'today', 'feeling'])}?`,
 
   // Questions
-  () => `Did you ${faker.helpers.arrayElement(['see', 'hear about', 'check out'])} ${faker.lorem.words(3)}?`,
-  () => `What do you think about ${faker.lorem.words(2)}?`,
-  () => `Have you ${faker.helpers.arrayElement(['finished', 'started', 'seen'])} ${faker.lorem.words(2)}?`,
+  () => `Did you ${faker.helpers.arrayElement(['see', 'hear about', 'check out'])} ${faker.helpers.arrayElement(['the news', 'that video', 'the game', 'the update', 'that post'])}?`,
+  () => `What do you think about ${faker.helpers.arrayElement(['this', 'that', 'the idea', 'the plan', 'it'])}?`,
+  () => `Have you ${faker.helpers.arrayElement(['finished', 'started', 'seen'])} ${faker.helpers.arrayElement(['the project', 'that thing', 'your work', 'the assignment', 'it'])}?`,
   () => `Are you ${faker.helpers.arrayElement(['free', 'available', 'around'])} ${faker.helpers.arrayElement(['later', 'tomorrow', 'this weekend'])}?`,
   () => `Want to ${faker.helpers.arrayElement(['grab lunch', 'meet up', 'catch up', 'hang out'])}?`,
 
@@ -48,9 +48,9 @@ const MESSAGE_TEMPLATES = [
   () => faker.helpers.arrayElement(['I agree', 'Makes sense', 'Good point', 'True', 'Exactly']),
 
   // Statements
-  () => `I ${faker.helpers.arrayElement(['think', 'feel', 'believe'])} ${faker.lorem.sentence()}`,
-  () => `Just ${faker.helpers.arrayElement(['finished', 'started', 'working on'])} ${faker.lorem.words(3)}`,
-  () => faker.lorem.sentence(),
+  () => `I ${faker.helpers.arrayElement(['think', 'feel', 'believe'])} ${faker.helpers.arrayElement(['that makes sense', 'we should do it', 'it\'s a good idea', 'that could work', 'you\'re right'])}`,
+  () => `Just ${faker.helpers.arrayElement(['finished', 'started', 'working on'])} ${faker.helpers.arrayElement(['my homework', 'that project', 'the assignment', 'some stuff', 'it'])}`,
+  () => faker.helpers.arrayElement(['Looking forward to it', 'That sounds good', 'Can\'t wait', 'Sounds like a plan', 'Let\'s do it']),
   () => `Let me know ${faker.helpers.arrayElement(['what you think', 'if you need anything', 'how it goes'])}`,
   () => `I'll ${faker.helpers.arrayElement(['check it out', 'look into it', 'get back to you', 'send you the details'])}`,
 
@@ -62,7 +62,7 @@ const MESSAGE_TEMPLATES = [
   // Casual
   () => faker.helpers.arrayElement(['lol', 'haha', 'nice', 'cool', 'nice!', 'awesome']),
   () => faker.helpers.arrayElement(['👍', '😊', '🎉', '😂', '❤️', '🔥', '💯']),
-  () => `${faker.helpers.arrayElement(['Btw', 'By the way', 'Also'])}, ${faker.lorem.sentence()}`
+  () => `${faker.helpers.arrayElement(['Btw', 'By the way', 'Also'])}, ${faker.helpers.arrayElement(['I forgot to mention', 'don\'t forget', 'thanks for that', 'I heard about it', 'that reminds me'])}`
 ];
 
 // Function to generate a random message
