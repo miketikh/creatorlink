@@ -110,6 +110,21 @@ async function seedData() {
 
   console.log(`\n✅ Created ${userIds.length} auth users\n`);
 
+  // Create AI Agent user with fixed UID
+  console.log('🤖 Creating AI Agent user...');
+  try {
+    await auth.createUser({
+      uid: 'ai-agent',
+      email: 'ai@creatorlink.local',
+      password: 'password',
+      displayName: 'AI Assistant'
+    });
+    console.log(`  ✓ Created AI Assistant (ai-agent)`);
+  } catch (error) {
+    console.error(`  ✗ Failed to create AI Assistant:`, error.message);
+  }
+  console.log('');
+
   // Step 2: Create Firestore user profiles
   console.log('📝 Creating user profiles in Firestore...');
 
@@ -136,6 +151,17 @@ async function seedData() {
   }
 
   console.log(`\n✅ Created ${USERS.length} user profiles\n`);
+
+  // Create AI Agent Firestore profile
+  console.log('🤖 Creating AI Agent profile in Firestore...');
+  await db.collection('users').doc('ai-agent').set({
+    displayName: 'AI Assistant',
+    email: 'ai@creatorlink.local',
+    photoURL: 'https://ui-avatars.com/api/?name=AI&background=9C27B0&color=fff&size=200&bold=true',
+    isOnline: false,
+    lastSeen: getTimestamp(0)
+  });
+  console.log(`  ✓ Created AI Assistant profile\n`);
 
   // Map for easy reference
   const [alice, bob, carol, david, emma, frank, grace, henry, iris, jack] = userIds;

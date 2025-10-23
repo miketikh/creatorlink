@@ -63,14 +63,28 @@ struct MessageBubbleView: View {
                 }
 
                 VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                    // Message bubble
-                    Text(message.text)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
-                        .background(backgroundColor)
-                        .foregroundColor(textColor)
-                        .cornerRadius(18)
-                        .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: bubbleAlignment)
+                    // Message bubble with optional AI badge
+                    HStack(spacing: 6) {
+                        if isAIMessage && !isFromCurrentUser {
+                            Image(systemName: "sparkles")
+                                .font(.caption2)
+                                .foregroundColor(.purple)
+                        }
+
+                        Text(message.text)
+
+                        if isAIMessage && isFromCurrentUser {
+                            Image(systemName: "sparkles")
+                                .font(.caption2)
+                                .foregroundColor(.purple.opacity(0.8))
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .background(backgroundColor)
+                    .foregroundColor(textColor)
+                    .cornerRadius(18)
+                    .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: bubbleAlignment)
 
                     // Timestamp and status (only show if showTimestamp is true)
                     if showTimestamp {
@@ -95,8 +109,16 @@ struct MessageBubbleView: View {
 
     // MARK: - Computed Properties
 
+    private var isAIMessage: Bool {
+        message.metadata?["ai_generated"] == "true"
+    }
+
     private var backgroundColor: Color {
-        isFromCurrentUser ? .blue : Color(.systemGray5)
+        if isAIMessage {
+            // Distinct purple tint for AI messages
+            return Color(red: 0.75, green: 0.6, blue: 0.9, opacity: 0.2)
+        }
+        return isFromCurrentUser ? .blue : Color(.systemGray5)
     }
 
     private var textColor: Color {
