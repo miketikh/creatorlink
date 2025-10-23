@@ -14,13 +14,17 @@ import Observation
 class TypingService {
     static let shared = TypingService()
 
-    private let database: DatabaseReference
+    private var database: DatabaseReference {
+        #if DEBUG
+        return Database.database(url: "http://127.0.0.1:9000?ns=creatorlink-c160a").reference()
+        #else
+        return Database.database().reference()
+        #endif
+    }
     private var typingTimers: [String: Timer] = [:]
     private var onDisconnectRefs: [String: DatabaseReference] = [:]
 
-    private init() {
-        database = Database.database().reference()
-    }
+    private init() {}
 
     // MARK: - Public Methods
 

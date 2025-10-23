@@ -14,7 +14,13 @@ import FirebaseFirestore
 class PresenceService {
     static let shared = PresenceService()
 
-    private let rtdb = Database.database().reference()
+    private var rtdb: DatabaseReference {
+        #if DEBUG
+        return Database.database(url: "http://127.0.0.1:9000?ns=creatorlink-c160a").reference()
+        #else
+        return Database.database().reference()
+        #endif
+    }
     private let firestore = Firestore.firestore()
     private var offlineTimer: Timer?
 

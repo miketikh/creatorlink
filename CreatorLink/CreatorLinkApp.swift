@@ -9,6 +9,7 @@ import SwiftUI
 import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseDatabase
 import UserNotifications
 
 class AppDelegate: NSObject, UIApplicationDelegate {
@@ -27,6 +28,9 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         settings.cacheSettings = MemoryCacheSettings()
         settings.isSSLEnabled = false
         Firestore.firestore().settings = settings
+
+        // Connect Realtime Database to emulator
+        Database.database(url: "http://127.0.0.1:9000?ns=creatorlink-c160a")
         #endif
 
         // Initialize auth service after Firebase is configured

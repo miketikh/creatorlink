@@ -158,5 +158,12 @@ Temporary Items
 *.bak
 *.tmp
 *.temp
+
+# Firebase emulator debug logs
 firebase-debug.log
 firestore-debug.log
+database-debug.log
+
+# Firebase Emulator seed script (Node.js dependencies)
+emulator-seed/node_modules/
+emulator-seed/package-lock.json
