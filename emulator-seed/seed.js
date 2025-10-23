@@ -116,12 +116,19 @@ async function seedData() {
   for (let i = 0; i < USERS.length; i++) {
     const user = USERS[i];
     const userId = userIds[i];
-    const avatarURL = generateAvatarURL(user.displayName, user.email);
+
+    // Use Unsplash image for Alice, generated avatars for others
+    let photoURL;
+    if (user.displayName === 'Alice Johnson') {
+      photoURL = 'https://images.unsplash.com/photo-1574158622682-e40e69881006?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1480';
+    } else {
+      photoURL = generateAvatarURL(user.displayName, user.email);
+    }
 
     await db.collection('users').doc(userId).set({
       displayName: user.displayName,
       email: user.email,
-      photoURL: avatarURL,
+      photoURL: photoURL,
       isOnline: i < 2, // Alice and Bob online, others offline
       lastSeen: getTimestamp(0)
     });
@@ -193,13 +200,19 @@ async function seedData() {
   const aliceEmmaConv = await createConversation([alice, emma], false, null, null, 50);
   console.log('  ✓ Alice ↔ Emma (50 messages)');
 
-  await createConversation([alice, bob, carol, david], true, 'Study Group',
-    'https://ui-avatars.com/api/?name=Study+Group&background=4CAF50&color=fff&size=200', 10);
-  console.log('  ✓ Study Group (Alice, Bob, Carol, David - 10 messages)');
+  // Group 1: No custom image (will use default/fallback)
+  await createConversation([alice, bob, carol, david], true, 'Study Group', null, 10);
+  console.log('  ✓ Study Group (Alice, Bob, Carol, David - 10 messages) - no custom image');
 
-  await createConversation([alice, emma, frank, grace], true, 'Weekend Plans',
+  // Group 2: Generated avatar
+  await createConversation([alice, bob, emma, frank], true, 'Weekend Plans',
     'https://ui-avatars.com/api/?name=Weekend+Plans&background=2196F3&color=fff&size=200', 5);
-  console.log('  ✓ Weekend Plans (Alice, Emma, Frank, Grace - 5 messages)');
+  console.log('  ✓ Weekend Plans (Alice, Bob, Emma, Frank - 5 messages) - generated avatar');
+
+  // Group 3: Unsplash image
+  await createConversation([alice, bob, grace], true, 'City Explorers',
+    'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1544', 8);
+  console.log('  ✓ City Explorers (Alice, Bob, Grace - 8 messages) - Unsplash image');
 
   // Bob's additional conversations
   await createConversation([bob, henry], false, null, null, 1);

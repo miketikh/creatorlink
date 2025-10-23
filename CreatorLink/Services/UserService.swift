@@ -94,6 +94,41 @@ class UserService {
         return try await fetchUserProfile(userId: userId)
     }
 
+    func updateDisplayName(userId: String, displayName: String) async throws {
+        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedName.isEmpty else {
+            throw UserServiceError.emptyDisplayName
+        }
+
+        guard trimmedName.count <= 50 else {
+            throw UserServiceError.displayNameTooLong
+        }
+
+        try await firestoreService.usersCollection
+            .document(userId)
+            .updateData([
+                "displayName": trimmedName
+            ])
+    }
+
+    func updatePhotoURL(userId: String, photoURL: String) async throws {
+        let trimmedURL = photoURL.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Allow empty URL (will use fallback avatar)
+        if !trimmedURL.isEmpty {
+            guard trimmedURL.hasPrefix("http://") || trimmedURL.hasPrefix("https://") else {
+                throw UserServiceError.invalidPhotoURL
+            }
+        }
+
+        try await firestoreService.usersCollection
+            .document(userId)
+            .updateData([
+                "photoURL": trimmedURL.isEmpty ? "" : trimmedURL
+            ])
+    }
+
     var currentUserId: String? {
         return AuthService.shared.currentUser?.uid
     }
@@ -103,11 +138,20 @@ class UserService {
 
 enum UserServiceError: LocalizedError {
     case userNotFound
+    case emptyDisplayName
+    case displayNameTooLong
+    case invalidPhotoURL
 
     var errorDescription: String? {
         switch self {
         case .userNotFound:
             return "User profile not found."
+        case .emptyDisplayName:
+            return "Display name cannot be empty."
+        case .displayNameTooLong:
+            return "Display name must be 50 characters or less."
+        case .invalidPhotoURL:
+            return "Photo URL must start with http:// or https://."
         }
     }
 }

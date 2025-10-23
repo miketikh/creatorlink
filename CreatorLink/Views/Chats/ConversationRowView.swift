@@ -19,6 +19,7 @@ struct ConversationRowView: View {
     @State private var unreadCount = 0
     @State private var unreadCountTask: Task<Void, Never>?
     @State private var messageListener: ListenerRegistration?
+    @State private var userProfileListener: ListenerRegistration?
     @State private var presenceHandle: DatabaseHandle?
     @State private var typingHandle: DatabaseHandle?
     @State private var isOtherUserTyping = false
@@ -120,6 +121,7 @@ struct ConversationRowView: View {
         .onDisappear {
             unreadCountTask?.cancel()
             messageListener?.remove()
+            userProfileListener?.remove()
 
             // Clean up presence listener
             if let otherUserId = otherUser?.id, let handle = presenceHandle {
@@ -240,11 +242,40 @@ struct ConversationRowView: View {
             // Start listening to presence for the other user
             if let otherUserId = otherUser?.id {
                 listenToPresence(userId: otherUserId)
+                setupUserProfileListener(userId: otherUserId)
             }
         } else {
             // For group chats, load the last message sender name
             await fetchLastMessageSender()
         }
+    }
+
+    private func setupUserProfileListener(userId: String) {
+        // Remove existing listener if any
+        userProfileListener?.remove()
+
+        // Set up real-time listener for the other user's profile
+        userProfileListener = FirestoreService.shared.usersCollection
+            .document(userId)
+            .addSnapshotListener { [self] snapshot, error in
+                guard let snapshot = snapshot,
+                      snapshot.exists,
+                      let data = snapshot.data() else {
+                    return
+                }
+
+                // Update otherUser with new profile data
+                Task { @MainActor in
+                    self.otherUser = UserProfile(
+                        id: userId,
+                        displayName: data["displayName"] as? String ?? "Unknown User",
+                        email: data["email"] as? String ?? "",
+                        photoURL: data["photoURL"] as? String,
+                        isOnline: data["isOnline"] as? Bool ?? false,
+                        lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date()
+                    )
+                }
+            }
     }
 
     private func fetchLastMessageSender() async {

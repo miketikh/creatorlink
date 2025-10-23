@@ -173,11 +173,13 @@ class ConversationService {
     ///   - conversationId: The ID of the conversation
     ///   - text: The text of the last message
     ///   - timestamp: The timestamp of the last message
-    func updateLastMessage(conversationId: String, text: String, timestamp: Date) async throws {
+    ///   - senderId: The ID of the user who sent the message
+    func updateLastMessage(conversationId: String, text: String, timestamp: Date, senderId: String) async throws {
         do {
             try await conversationsCollection.document(conversationId).updateData([
                 "lastMessage": text,
-                "lastMessageTime": Timestamp(date: timestamp)
+                "lastMessageTime": Timestamp(date: timestamp),
+                "lastMessageSenderId": senderId
             ])
         } catch {
             throw ConversationError.updateFailed(error)
@@ -436,7 +438,7 @@ class ConversationService {
             try await messagesCollection.addDocument(data: messageData)
 
             // Update conversation's last message
-            try await updateLastMessage(conversationId: conversationId, text: messageText, timestamp: Date())
+            try await updateLastMessage(conversationId: conversationId, text: messageText, timestamp: Date(), senderId: "system")
         } catch {
             // Don't throw - system messages are nice to have but not critical
         }

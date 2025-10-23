@@ -133,7 +133,8 @@ class ChatViewModel {
             try await conversationService.updateLastMessage(
                 conversationId: conversationId,
                 text: trimmedText,
-                timestamp: sentMessage.timestamp
+                timestamp: sentMessage.timestamp,
+                senderId: currentUserId
             )
 
             isSending = false
