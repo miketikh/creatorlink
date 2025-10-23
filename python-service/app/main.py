@@ -125,8 +125,9 @@ async def process_message(request: MessageRequest) -> MessageResponse:
         ai_response_text = await ai_agent.process(request.text)
 
         # Create metadata for AI-generated message
+        # Note: All values must be strings to match iOS Message model [String: String]
         response_metadata = {
-            "ai_generated": True,
+            "ai_generated": "true",
             "original_message_id": request.messageId,
             "agent_type": "echo",
             "agent_version": "0.1.0"

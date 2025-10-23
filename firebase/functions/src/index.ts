@@ -23,15 +23,6 @@ export const onMessageCreated = onDocumentCreated(
     const messageId = event.params.messageId;
     const messageData = event.data?.data();
 
-    // DIAGNOSTIC: Log full message data to debug infinite loop
-    logger.info("DIAGNOSTIC - Message data structure:", {
-      messageId,
-      messageData: JSON.stringify(messageData),
-      senderId: messageData?.senderId,
-      senderIdType: typeof messageData?.senderId,
-      isAI: messageData?.senderId === "ai-agent",
-    });
-
     // Skip processing if this is an AI-generated message to prevent infinite loops
     if (messageData?.senderId === "ai-agent") {
       logger.info("Skipping AI-generated message", {

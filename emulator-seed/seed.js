@@ -213,46 +213,46 @@ async function seedData() {
     return conversationId;
   }
 
-  // Alice's conversations
-  const aliceBobConv = await createConversation([alice, bob], false, null, null, 50);
-  console.log('  ✓ Alice ↔ Bob (50 messages)');
+  // Alice's conversations (AI agent included)
+  const aliceBobConv = await createConversation([alice, 'ai-agent', bob].sort(), false, null, null, 50);
+  console.log('  ✓ Alice ↔ Bob (with AI Agent - 50 messages)');
 
-  await createConversation([alice, carol], false, null, null, 1);
-  console.log('  ✓ Alice ↔ Carol (1 message)');
+  await createConversation([alice, 'ai-agent', carol].sort(), false, null, null, 1);
+  console.log('  ✓ Alice ↔ Carol (with AI Agent - 1 message)');
 
-  await createConversation([alice, david], false, null, null, 1);
-  console.log('  ✓ Alice ↔ David (1 message)');
+  await createConversation([alice, 'ai-agent', david].sort(), false, null, null, 1);
+  console.log('  ✓ Alice ↔ David (with AI Agent - 1 message)');
 
-  const aliceEmmaConv = await createConversation([alice, emma], false, null, null, 50);
-  console.log('  ✓ Alice ↔ Emma (50 messages)');
+  const aliceEmmaConv = await createConversation([alice, 'ai-agent', emma].sort(), false, null, null, 50);
+  console.log('  ✓ Alice ↔ Emma (with AI Agent - 50 messages)');
 
   // Group 1: No custom image (will use default/fallback)
-  await createConversation([alice, bob, carol, david], true, 'Study Group', null, 10);
-  console.log('  ✓ Study Group (Alice, Bob, Carol, David - 10 messages) - no custom image');
+  await createConversation([alice, 'ai-agent', bob, carol, david].sort(), true, 'Study Group', null, 10);
+  console.log('  ✓ Study Group (Alice, Bob, Carol, David, AI Agent - 10 messages) - no custom image');
 
   // Group 2: Generated avatar
-  await createConversation([alice, bob, emma, frank], true, 'Weekend Plans',
+  await createConversation([alice, 'ai-agent', bob, emma, frank].sort(), true, 'Weekend Plans',
     'https://ui-avatars.com/api/?name=Weekend+Plans&background=2196F3&color=fff&size=200', 5);
-  console.log('  ✓ Weekend Plans (Alice, Bob, Emma, Frank - 5 messages) - generated avatar');
+  console.log('  ✓ Weekend Plans (Alice, Bob, Emma, Frank, AI Agent - 5 messages) - generated avatar');
 
   // Group 3: Unsplash image
-  await createConversation([alice, bob, grace], true, 'City Explorers',
+  await createConversation([alice, 'ai-agent', bob, grace].sort(), true, 'City Explorers',
     'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1544', 8);
-  console.log('  ✓ City Explorers (Alice, Bob, Grace - 8 messages) - Unsplash image');
+  console.log('  ✓ City Explorers (Alice, Bob, Grace, AI Agent - 8 messages) - Unsplash image');
 
-  // Bob's additional conversations
-  await createConversation([bob, henry], false, null, null, 1);
-  console.log('  ✓ Bob ↔ Henry (1 message)');
+  // Bob's additional conversations (AI agent included)
+  await createConversation(['ai-agent', bob, henry].sort(), false, null, null, 1);
+  console.log('  ✓ Bob ↔ Henry (with AI Agent - 1 message)');
 
-  await createConversation([bob, iris], false, null, null, 1);
-  console.log('  ✓ Bob ↔ Iris (1 message)');
+  await createConversation(['ai-agent', bob, iris].sort(), false, null, null, 1);
+  console.log('  ✓ Bob ↔ Iris (with AI Agent - 1 message)');
 
-  const bobJackConv = await createConversation([bob, jack], false, null, null, 50);
-  console.log('  ✓ Bob ↔ Jack (50 messages)');
+  const bobJackConv = await createConversation(['ai-agent', bob, jack].sort(), false, null, null, 50);
+  console.log('  ✓ Bob ↔ Jack (with AI Agent - 50 messages)');
 
-  await createConversation([bob, jack, frank, henry], true, 'Gaming Squad',
+  await createConversation(['ai-agent', bob, frank, henry, jack].sort(), true, 'Gaming Squad',
     'https://ui-avatars.com/api/?name=Gaming+Squad&background=FF5722&color=fff&size=200', 8);
-  console.log('  ✓ Gaming Squad (Bob, Jack, Frank, Henry - 8 messages)');
+  console.log('  ✓ Gaming Squad (Bob, Jack, Frank, Henry, AI Agent - 8 messages)');
 
   console.log(`\n✅ Created ${conversations.length} conversations\n`);
 
