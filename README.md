@@ -21,14 +21,82 @@ A modern iOS messaging application built with SwiftUI and Firebase, featuring re
 
 ## Setup
 
-### 1. Clone the Repository
+### Option A: Local Development with Firebase Emulators (Recommended)
+
+This is the fastest way to get started for local development and testing.
+
+#### 1. Clone the Repository
 
 ```bash
 git clone <repository-url>
 cd CreatorLink
 ```
 
-### 2. Firebase Configuration
+#### 2. Install Firebase CLI
+
+```bash
+npm install -g firebase-tools
+```
+
+#### 3. Install Emulator Seed Dependencies
+
+```bash
+cd emulator-seed
+npm install
+cd ..
+```
+
+#### 4. Start Firebase Emulators
+
+```bash
+cd firebase
+firebase emulators:start
+```
+
+This will start:
+- **Authentication Emulator** (port 9099)
+- **Firestore Emulator** (port 8080)
+- **Realtime Database Emulator** (port 9000)
+- **Storage Emulator** (port 9199)
+- **Emulator UI** (http://localhost:4000)
+
+#### 5. Seed Test Data (Optional)
+
+In a new terminal, seed the emulators with test users and conversations:
+
+```bash
+cd emulator-seed
+node seed.js
+```
+
+This creates 10 test users (Alice, Bob, Carol, etc.) with conversations and messages. All users have password: `password`
+
+#### 6. Build and Run
+
+1. Open `CreatorLink.xcodeproj` in Xcode
+2. Select your target device or simulator
+3. Build and run (⌘R)
+
+The app will automatically connect to the local emulators in DEBUG mode.
+
+**Test Users:**
+- alice.johnson@test.com / password
+- bob.martinez@test.com / password
+- carol.williams@test.com / password
+- (and 7 more - see `emulator-seed/seed.js`)
+
+### Option B: Production Firebase Setup
+
+For production deployment or testing with real Firebase services.
+
+#### 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd CreatorLink
+```
+
+#### 2. Firebase Configuration
 
 The project requires a Firebase configuration file that is not included in version control for security reasons.
 
@@ -40,7 +108,7 @@ The project requires a Firebase configuration file that is not included in versi
 
 **Important**: The app will not build without this file.
 
-### 3. Firebase Setup Requirements
+#### 3. Firebase Setup Requirements
 
 Your Firebase project needs the following services enabled:
 
@@ -49,65 +117,98 @@ Your Firebase project needs the following services enabled:
   - `users`
   - `conversations`
   - `messages`
-- **Realtime Database**: Required for presence indicators
+- **Realtime Database**: Required for presence indicators and typing indicators
 - **Cloud Messaging** (optional): For push notifications
 
-### 4. Firestore Security Rules
+#### 4. Deploy Security Rules
 
-The project includes a `firestore.rules` file with the necessary security rules. Deploy them to your Firebase project:
+Deploy the security rules to your Firebase project:
 
-**Option 1: Via Firebase Console**
-1. Go to Firebase Console → Firestore Database → Rules tab
-2. Copy the contents of `firestore.rules` from this repo
-3. Paste and publish
-
-**Option 2: Via Firebase CLI**
 ```bash
-firebase deploy --only firestore:rules
+cd firebase
+firebase deploy --only firestore:rules,storage:rules,database:rules
 ```
 
-**Important**: The rules include permissions for:
-- Users leaving group conversations
-- Updating read receipts and delivery status
-- Muting/unmuting conversations
-- Standard read/write operations based on participation
+Or manually via Firebase Console by copying contents from the `firebase/` directory:
+- `firebase/firestore.rules`
+- `firebase/storage.rules`
+- `firebase/database.rules.json`
 
-### 5. Build and Run
+#### 5. Build and Run
 
 1. Open `CreatorLink.xcodeproj` in Xcode
 2. Select your target device or simulator
-3. Build and run (⌘R)
+3. Build and run in **Release** mode to connect to production Firebase
 
 ## Project Structure
 
 ```
 CreatorLink/
-├── Models/           # Data models (User, Conversation, Message)
-├── Services/         # Firebase services and business logic
-├── ViewModels/       # View models for state management
-├── Views/            # SwiftUI views
-│   ├── Auth/         # Authentication screens
-│   └── Chats/        # Chat and conversation screens
-└── GoogleService-Info.plist  # Firebase config (not in git)
+├── CreatorLink/                    # iOS app source
+│   ├── Models/                     # Data models (User, Conversation, Message)
+│   ├── Services/                   # Firebase services and business logic
+│   ├── ViewModels/                 # View models for state management
+│   ├── Views/                      # SwiftUI views
+│   ├── Utilities/                  # Helper utilities
+│   ├── Assets.xcassets/            # Images and assets
+│   ├── GoogleService-Info.plist    # Firebase config (not in git)
+│   └── Info.plist                  # App configuration
+├── CreatorLink.xcodeproj/          # Xcode project file
+├── firebase/                       # Firebase configuration
+│   ├── firebase.json               # Emulator configuration
+│   ├── .firebaserc                 # Firebase project alias
+│   ├── firestore.rules             # Firestore security rules
+│   ├── storage.rules               # Storage security rules
+│   └── database.rules.json         # Realtime Database security rules
+├── emulator-seed/                  # Seed data for local testing
+│   ├── seed.js                     # Seed script
+│   ├── package.json                # Node dependencies
+│   └── node_modules/               # (not in git)
+└── README.md
 ```
 
 ## Troubleshooting
 
-### Build fails with "GoogleService-Info.plist not found"
+### Local Development Issues
+
+#### Emulators not starting
+- Ensure Firebase CLI is installed: `firebase --version`
+- Check that ports 9099, 8080, 9000, 9199, and 4000 are not in use
+- Try running: `firebase emulators:start --only auth,firestore,database,storage`
+
+#### App not connecting to emulators
+- Verify emulators are running at `http://localhost:4000`
+- Ensure you're running the app in **DEBUG** mode (default in Xcode)
+- Check console logs for emulator connection messages
+
+#### Seed script fails
+- Run `npm install` in the `emulator-seed/` directory
+- Ensure emulators are running before running seed script
+- Check that `@faker-js/faker` is installed
+
+#### No test data appearing
+- Make sure you ran the seed script after starting emulators
+- Check the Emulator UI at `http://localhost:4000` to verify data
+- Try restarting the emulators and re-running the seed script
+
+### Production Issues
+
+#### Build fails with "GoogleService-Info.plist not found"
 - Make sure you've added the `GoogleService-Info.plist` file to the `CreatorLink/` directory
 - Verify the file is added to the Xcode project target
 
-### Authentication not working
+#### Authentication not working
 - Check that Authentication is enabled in Firebase Console
 - Verify your bundle identifier matches the one in Firebase
 
-### Messages not appearing
-- Ensure Firestore Database is created and rules are configured
+#### Messages not appearing
+- Ensure Firestore Database is created and rules are deployed
 - Check that Firestore and Realtime Database are in the same region
 
-### Presence indicators not updating
-- Verify Firebase Realtime Database is enabled
-- Check that the app has proper read/write permissions
+#### Presence/typing indicators not updating
+- Verify Firebase Realtime Database is enabled in Firebase Console
+- Check that database rules are deployed
+- Ensure the app has proper read/write permissions
 
 ## Architecture
 
