@@ -21,11 +21,27 @@ struct ConversationTagsView: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(displayedBadges, id: \.self) { badge in
-                TagBadgeView(
-                    emoji: badge.emoji,
-                    backgroundColor: badge.backgroundColor
-                )
+            ForEach(displayedBadges.indices, id: \.self) { index in
+                let badge = displayedBadges[index]
+                ZStack(alignment: .topTrailing) {
+                    TagBadgeView(
+                        emoji: badge.emoji,
+                        backgroundColor: badge.backgroundColor,
+                        accessibilityLabel: badge.accessibilityLabel
+                    )
+
+                    // Show AI/USER badge on first badge only
+                    if index == 0, let indicator = tagIndicator {
+                        Text(indicator.text)
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(2)
+                            .frame(width: 12, height: 12)
+                            .background(indicator.color)
+                            .clipShape(Circle())
+                            .offset(x: 4, y: -4)
+                    }
+                }
             }
         }
     }
@@ -36,6 +52,33 @@ struct ConversationTagsView: View {
         let emoji: String
         let backgroundColor: Color
         let priority: Int
+        let accessibilityLabel: String
+    }
+
+    private struct IndicatorInfo {
+        let text: String
+        let color: Color
+    }
+
+    /// Determines which indicator badge to show (AI or USER)
+    private var tagIndicator: IndicatorInfo? {
+        // Check if user has overridden status tags
+        let hasUserOverrideStatus = conversation.tagMetadata?.userOverrideStatus ?? false
+
+        if hasUserOverrideStatus {
+            return IndicatorInfo(text: "U", color: .blue)
+        }
+
+        // Check if AI suggested tags exist and user hasn't overridden
+        let hasAISuggestion = conversation.tagMetadata?.aiSuggestedCategory != nil
+        let hasAIConfidence = conversation.tagMetadata?.aiConfidenceScore != nil
+        let hasUserOverrideCategory = conversation.tagMetadata?.userOverrideCategory ?? false
+
+        if hasAISuggestion && hasAIConfidence && !hasUserOverrideCategory {
+            return IndicatorInfo(text: "AI", color: Color.purple)
+        }
+
+        return nil
     }
 
     private var displayedBadges: [BadgeInfo] {
@@ -49,7 +92,8 @@ struct ConversationTagsView: View {
             badges.append(BadgeInfo(
                 emoji: StatusTag.urgent.emoji,
                 backgroundColor: Color.red.opacity(0.1),
-                priority: 1
+                priority: 1,
+                accessibilityLabel: "Urgent status"
             ))
         }
 
@@ -58,7 +102,8 @@ struct ConversationTagsView: View {
             badges.append(BadgeInfo(
                 emoji: StatusTag.needsResponse.emoji,
                 backgroundColor: .clear,
-                priority: 2
+                priority: 2,
+                accessibilityLabel: "Needs response status"
             ))
         }
 
@@ -67,7 +112,8 @@ struct ConversationTagsView: View {
             badges.append(BadgeInfo(
                 emoji: StatusTag.awaitingReply.emoji,
                 backgroundColor: .clear,
-                priority: 3
+                priority: 3,
+                accessibilityLabel: "Awaiting reply status"
             ))
         }
 
@@ -76,24 +122,20 @@ struct ConversationTagsView: View {
             badges.append(BadgeInfo(
                 emoji: StatusTag.resolved.emoji,
                 backgroundColor: .clear,
-                priority: 4
+                priority: 4,
+                accessibilityLabel: "Resolved status"
             ))
         }
 
-        // Priority 5: Primary category (if space allows and not already at max)
-        if badges.count < 3, let primaryCategory = conversation.primaryCategory {
-            badges.append(BadgeInfo(
-                emoji: primaryCategory.emoji,
-                backgroundColor: .clear,
-                priority: 5
-            ))
-        } else if badges.count < 3, !userTags.categories.isEmpty {
-            // If no primaryCategory, use first category tag
+        // Priority 5: User's category tags (if space allows and not already at max)
+        if badges.count < 3, !userTags.categories.isEmpty {
+            // Use user's first category tag
             let firstCategory = userTags.categories[0]
             badges.append(BadgeInfo(
                 emoji: firstCategory.emoji,
                 backgroundColor: .clear,
-                priority: 5
+                priority: 5,
+                accessibilityLabel: "\(firstCategory.displayName) category"
             ))
         }
 

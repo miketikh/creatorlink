@@ -97,6 +97,30 @@ struct ChatsView: View {
         }
     }
 
+    // MARK: - Swipe Actions
+
+    private enum SwipeActionType {
+        case urgent
+        case resolved
+    }
+
+    private func handleSwipeAction(_ action: SwipeActionType, for conversation: Conversation) {
+        guard let conversationId = conversation.id else { return }
+
+        // Provide haptic feedback
+        let successFeedback = UINotificationFeedbackGenerator()
+        successFeedback.notificationOccurred(.success)
+
+        Task {
+            switch action {
+            case .urgent:
+                await viewModel.markConversationAsUrgent(conversationId: conversationId)
+            case .resolved:
+                await viewModel.markConversationAsResolved(conversationId: conversationId)
+            }
+        }
+    }
+
     // MARK: - Deep Link Handling
 
     /// Handle deep link navigation to a specific conversation
@@ -167,6 +191,22 @@ struct ChatsView: View {
                 selectedConversation = conversation
             } label: {
                 ConversationRowView(conversation: conversation, viewModel: viewModel)
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                Button {
+                    handleSwipeAction(.urgent, for: conversation)
+                } label: {
+                    Label("Urgent", systemImage: "flame.fill")
+                }
+                .tint(.red)
+            }
+            .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                Button {
+                    handleSwipeAction(.resolved, for: conversation)
+                } label: {
+                    Label("Resolved", systemImage: "checkmark.circle.fill")
+                }
+                .tint(.green)
             }
         }
         .listStyle(.plain)

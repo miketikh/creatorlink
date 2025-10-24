@@ -35,6 +35,7 @@ struct ChatDetailView: View {
     @State private var faqScrollError: String?
     @State private var showFAQError = false
     @State private var isLoadingFAQReference = false
+    @State private var showTagEditor = false
     @FocusState private var isInputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -104,6 +105,16 @@ struct ChatDetailView: View {
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showTagEditor = true
+                } label: {
+                    Image(systemName: "tag")
+                        .font(.body)
+                }
+                .accessibilityLabel("Edit conversation tags")
+            }
+
             ToolbarItem(placement: .principal) {
                 HStack(spacing: 8) {
                     // Profile photo or group avatar
@@ -131,10 +142,16 @@ struct ChatDetailView: View {
                         }
                     }
 
-                    // Name and status/participant count
+                    // Name, status/participant count, and tags
                     VStack(alignment: .leading, spacing: 2) {
                         Text(navigationTitle)
                             .font(.headline)
+
+                        // Tag badges (if any tags exist for current user)
+                        if let currentUserId = AuthService.shared.currentUser?.uid, hasAnyTags {
+                            ConversationTagsView(conversation: conversation, userId: currentUserId)
+                                .id(conversation.tagsByUser?[currentUserId]) // Force re-render when tags change
+                        }
 
                         if conversation.isGroupChat {
                             // Show participant count for groups
@@ -269,6 +286,11 @@ struct ChatDetailView: View {
                 viewModel.senderProfiles[userId]
             }
             MessageReadDetailsView(message: message, participants: participantProfiles)
+        }
+        .sheet(isPresented: $showTagEditor) {
+            if let currentUserId = AuthService.shared.currentUser?.uid {
+                TagEditorSheet(conversation: conversation, userId: currentUserId)
+            }
         }
     }
 
@@ -540,6 +562,12 @@ struct ChatDetailView: View {
 
     private var canSendMessage: Bool {
         !messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !viewModel.isSending
+    }
+
+    private var hasAnyTags: Bool {
+        guard let userId = AuthService.shared.currentUser?.uid else { return false }
+        let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
+        return !tags.categories.isEmpty || !tags.statuses.isEmpty
     }
 
     // MARK: - Helper Methods for Timestamp Grouping

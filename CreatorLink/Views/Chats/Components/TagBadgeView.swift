@@ -10,10 +10,12 @@ import SwiftUI
 struct TagBadgeView: View {
     let emoji: String
     let backgroundColor: Color
+    let accessibilityLabel: String?
 
-    init(emoji: String, backgroundColor: Color = .clear) {
+    init(emoji: String, backgroundColor: Color = .clear, accessibilityLabel: String? = nil) {
         self.emoji = emoji
         self.backgroundColor = backgroundColor
+        self.accessibilityLabel = accessibilityLabel
     }
 
     var body: some View {
@@ -22,6 +24,7 @@ struct TagBadgeView: View {
             .frame(width: 24, height: 24)
             .background(backgroundColor)
             .clipShape(Circle())
+            .accessibilityLabel(accessibilityLabel ?? emoji)
     }
 }
 

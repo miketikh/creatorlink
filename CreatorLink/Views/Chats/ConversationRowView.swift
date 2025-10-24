@@ -57,6 +57,7 @@ struct ConversationRowView: View {
                 // Tag badges (if any tags exist for current user)
                 if let currentUserId = viewModel.currentUserId, hasAnyTags {
                     ConversationTagsView(conversation: conversation, userId: currentUserId)
+                        .id(conversation.tagsByUser?[currentUserId]) // Force re-render when tags change
                 }
 
                 // Show typing indicator or last message
@@ -119,6 +120,9 @@ struct ConversationRowView: View {
                     .frame(width: 3)
             }
         }
+        .contextMenu {
+            contextMenuContent
+        }
         .task {
             await loadOtherUser()
             await loadUnreadCount()
@@ -150,6 +154,62 @@ struct ConversationRowView: View {
     }
 
     // MARK: - Subviews
+
+    @ViewBuilder
+    private var contextMenuContent: some View {
+        // Get current user's tags
+        let userId = viewModel.currentUserId ?? ""
+        let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
+        let hasUrgent = tags.statuses.contains(.urgent)
+        let hasResolved = tags.statuses.contains(.resolved)
+
+        // Quick tag actions
+        Button {
+            handleTagAction(.markUrgent)
+        } label: {
+            Label(hasUrgent ? "Remove Urgent" : "Mark as Urgent", systemImage: hasUrgent ? "flame.fill" : "flame")
+        }
+        .accessibilityLabel(hasUrgent ? "Remove urgent flag" : "Mark conversation as urgent")
+        .accessibilityHint(hasUrgent ? "Removes urgent priority from this conversation" : "Flags this conversation as urgent requiring immediate attention")
+
+        Button {
+            handleTagAction(.markResolved)
+        } label: {
+            Label(hasResolved ? "Mark as Unresolved" : "Mark as Resolved", systemImage: hasResolved ? "checkmark.circle.fill" : "checkmark.circle")
+        }
+        .accessibilityLabel(hasResolved ? "Mark as unresolved" : "Mark conversation as resolved")
+        .accessibilityHint(hasResolved ? "Marks this conversation as needing attention" : "Marks this conversation as completed")
+
+        Divider()
+
+        // Category tags submenu
+        Menu {
+            ForEach([ConversationTag.business, .collaboration, .social, .fan], id: \.self) { tag in
+                Button {
+                    handleTagAction(.toggleCategory(tag))
+                } label: {
+                    Label(tag.displayName, systemImage: tags.categories.contains(tag) ? "checkmark" : "")
+                }
+                .accessibilityLabel("Tag as \(tag.displayName)")
+                .accessibilityHint(tags.categories.contains(tag) ? "Currently tagged, tap to remove" : "Tap to add \(tag.displayName) tag")
+            }
+        } label: {
+            Label("Change Category", systemImage: "folder")
+        }
+        .accessibilityLabel("Change conversation category")
+        .accessibilityHint("Opens menu to select conversation category tags")
+
+        Divider()
+
+        // Remove all tags
+        Button(role: .destructive) {
+            handleTagAction(.removeAll)
+        } label: {
+            Label("Remove Tags", systemImage: "trash")
+        }
+        .accessibilityLabel("Remove all tags")
+        .accessibilityHint("Removes all category and status tags from this conversation")
+    }
 
     private var profilePhoto: some View {
         Group {
@@ -257,6 +317,75 @@ struct ConversationRowView: View {
         guard let userId = viewModel.currentUserId else { return false }
         let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
         return tags.statuses.contains(.urgent)
+    }
+
+    // MARK: - Tag Actions
+
+    private enum TagAction {
+        case markUrgent
+        case markResolved
+        case toggleCategory(ConversationTag)
+        case removeAll
+    }
+
+    private func handleTagAction(_ action: TagAction) {
+        guard let conversationId = conversation.id,
+              let userId = viewModel.currentUserId else {
+            return
+        }
+
+        // Provide haptic feedback
+        let impactFeedback = UIImpactFeedbackGenerator(style: .medium)
+        impactFeedback.impactOccurred()
+
+        Task {
+            do {
+                let currentTags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
+
+                switch action {
+                case .markUrgent:
+                    // Toggle urgent status
+                    if currentTags.statuses.contains(.urgent) {
+                        try await TaggingService.shared.removeUrgent(conversationId: conversationId, userId: userId)
+                    } else {
+                        try await TaggingService.shared.markAsUrgent(conversationId: conversationId, userId: userId)
+                    }
+
+                case .markResolved:
+                    // Toggle resolved status
+                    if currentTags.statuses.contains(.resolved) {
+                        // Remove resolved status
+                        var newStatuses = currentTags.statuses
+                        newStatuses.removeAll { $0 == .resolved }
+                        try await TaggingService.shared.updateStatusTags(conversationId: conversationId, userId: userId, tags: newStatuses)
+                    } else {
+                        try await TaggingService.shared.markAsResolved(conversationId: conversationId, userId: userId)
+                    }
+
+                case .toggleCategory(let tag):
+                    // Toggle category tag
+                    var newCategories = currentTags.categories
+                    if newCategories.contains(tag) {
+                        newCategories.removeAll { $0 == tag }
+                    } else {
+                        newCategories.append(tag)
+                        // Limit to max 2 tags
+                        if newCategories.count > 2 {
+                            newCategories = Array(newCategories.suffix(2))
+                        }
+                    }
+                    try await TaggingService.shared.updateCategoryTags(conversationId: conversationId, userId: userId, tags: newCategories)
+
+                case .removeAll:
+                    // Remove all tags
+                    try await TaggingService.shared.updateCategoryTags(conversationId: conversationId, userId: userId, tags: [])
+                    try await TaggingService.shared.updateStatusTags(conversationId: conversationId, userId: userId, tags: [])
+                }
+            } catch {
+                // Silently fail - real-time listener will show current state
+                print("Error updating tags: \(error)")
+            }
+        }
     }
 
     // MARK: - Methods

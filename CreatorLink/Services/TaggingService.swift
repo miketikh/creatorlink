@@ -40,14 +40,10 @@ class TaggingService {
                 throw ConversationError.invalidData
             }
 
-            // Build user tag data with category tags
-            let tagData: [String: Any] = [
-                "categoryTags": tags.map { $0.rawValue }
-            ]
-
-            // Update tagsByUser map using dot notation for the specific user
-            var updateData: [String: Any] = [
-                "tagsByUser.\(userId)": tagData
+            // Update only the categoryTags field within tagsByUser[userId]
+            // This preserves other fields like statusTags
+            let updateData: [String: Any] = [
+                "tagsByUser.\(userId).categoryTags": tags.map { $0.rawValue }
             ]
 
             // Update Firestore
@@ -73,21 +69,37 @@ class TaggingService {
                 throw ConversationError.invalidData
             }
 
+            // Get existing conversation to read current tagMetadata
+            let conversation = try document.data(as: Conversation.self)
+
             // Sanitize status tags before saving
             let sanitizedTags = sanitizeStatusTags(tags)
 
-            // Build user tag data with status tags
-            let tagData: [String: Any] = [
-                "statusTags": sanitizedTags.map { $0.rawValue }
-            ]
-
-            // Update tagsByUser map using dot notation for the specific user
+            // Update only the statusTags field within tagsByUser[userId]
+            // This preserves other fields like categoryTags
             var updateData: [String: Any] = [
-                "tagsByUser.\(userId)": tagData
+                "tagsByUser.\(userId).statusTags": sanitizedTags.map { $0.rawValue }
             ]
 
-            // Set userOverrideStatus flag in metadata
-            updateData["tagMetadata.userOverrideStatus"] = true
+            // Update tagMetadata with complete object to avoid decode errors
+            // Read existing metadata or create default
+            var metadataDict: [String: Any] = [
+                "userOverrideCategory": conversation.tagMetadata?.userOverrideCategory ?? false,
+                "userOverrideStatus": true  // Set to true when user manually updates status
+            ]
+
+            // Preserve existing AI fields if present
+            if let aiSuggestedCategory = conversation.tagMetadata?.aiSuggestedCategory {
+                metadataDict["aiSuggestedCategory"] = aiSuggestedCategory.rawValue
+            }
+            if let aiConfidenceScore = conversation.tagMetadata?.aiConfidenceScore {
+                metadataDict["aiConfidenceScore"] = aiConfidenceScore
+            }
+            if let lastAIAnalysisTime = conversation.tagMetadata?.lastAIAnalysisTime {
+                metadataDict["lastAIAnalysisTime"] = Timestamp(date: lastAIAnalysisTime)
+            }
+
+            updateData["tagMetadata"] = metadataDict
 
             // Update Firestore
             try await docRef.updateData(updateData)
@@ -303,16 +315,12 @@ class TaggingService {
             // Create Firestore batch
             let batch = db.batch()
 
-            // Build tag data
-            let tagData: [String: Any] = [
-                "categoryTags": tags.map { $0.rawValue }
-            ]
-
             // Add update operations for each conversation
             for conversationId in conversationIds {
                 let docRef = conversationsCollection.document(conversationId)
+                // Update only the categoryTags field to preserve other fields like statusTags
                 batch.updateData([
-                    "tagsByUser.\(userId)": tagData
+                    "tagsByUser.\(userId).categoryTags": tags.map { $0.rawValue }
                 ], forDocument: docRef)
             }
 
