@@ -6,7 +6,7 @@ Main application entry point with endpoints for message processing.
 import logging
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
 from fastapi import FastAPI, HTTPException
@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from .firebase_client import FirebaseClient
 from .ai_agents import AIAgent
+from .vector_store import VectorStore
 
 # Configure logging
 logging.basicConfig(
@@ -36,7 +37,58 @@ firebase_client = FirebaseClient()
 logger.info("Initializing AI agent...")
 ai_agent = AIAgent()
 
-logger.info("Application startup complete")
+# Vector store will be initialized in startup event
+vector_store = None
+
+logger.info("Application initialization complete (vector store will initialize on startup)")
+
+
+# Startup and shutdown event handlers
+@app.on_event("startup")
+async def startup_event():
+    """
+    Initialize services on application startup.
+    Sets up vector store and creates necessary collections.
+    """
+    global vector_store
+
+    try:
+        logger.info("Starting application initialization...")
+
+        # Initialize vector store
+        logger.info("Initializing vector store...")
+        vector_store = VectorStore()
+
+        # Create collection if it doesn't exist
+        await vector_store.initialize_collection()
+
+        logger.info("Application startup complete - all services initialized")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize application: {e}", exc_info=True)
+        raise
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """
+    Cleanup services on application shutdown.
+    Closes vector store connections and releases resources.
+    """
+    global vector_store
+
+    try:
+        logger.info("Starting application shutdown...")
+
+        # Close vector store connection
+        if vector_store:
+            logger.info("Closing vector store connection...")
+            await vector_store.close()
+
+        logger.info("Application shutdown complete")
+
+    except Exception as e:
+        logger.error(f"Error during application shutdown: {e}", exc_info=True)
 
 
 # Pydantic models for request/response validation
@@ -77,7 +129,7 @@ async def root() -> Dict[str, Any]:
         "status": "healthy",
         "service": "CreatorLink AI Service",
         "version": "0.1.0",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -85,16 +137,28 @@ async def root() -> Dict[str, Any]:
 async def health_check() -> Dict[str, Any]:
     """
     Detailed health check endpoint.
-    Checks Firebase connection and returns service status.
+    Checks Firebase, vector store connections and returns service status.
 
     Returns:
-        Detailed health status including Firebase connection
+        Detailed health status including all service components
     """
     # Check Firebase connection
     firebase_status = firebase_client.check_connection()
 
+    # Check vector store connection
+    vector_store_status = None
+    if vector_store:
+        vector_store_status = await vector_store.health_check()
+    else:
+        vector_store_status = {
+            "status": "not_initialized",
+            "error": "Vector store not initialized"
+        }
+
     # Determine overall health status
-    is_healthy = firebase_status.get("status") == "connected"
+    is_firebase_healthy = firebase_status.get("status") == "connected"
+    is_vector_store_healthy = vector_store_status.get("status") == "connected"
+    is_healthy = is_firebase_healthy and is_vector_store_healthy
 
     # Get agent info
     agent_info = ai_agent.get_agent_info()
@@ -103,8 +167,9 @@ async def health_check() -> Dict[str, Any]:
         "status": "healthy" if is_healthy else "unhealthy",
         "service": "CreatorLink AI Service",
         "version": "0.1.0",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "firebase": firebase_status,
+        "vector_store": vector_store_status,
         "ai_agent": agent_info
     }
 

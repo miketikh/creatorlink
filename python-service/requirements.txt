@@ -1,16 +1,21 @@
 # FastAPI and Web Server
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.0
-python-dotenv==1.0.0
+fastapi==0.119.1  # Latest as of Oct 20, 2025
+uvicorn[standard]==0.38.0  # Latest as of Oct 18, 2025
+pydantic==2.12.3  # Latest as of Oct 17, 2025
+python-dotenv==1.1.1  # Latest as of Jun 24, 2025
 
 # Firebase
-firebase-admin==6.4.0
+firebase-admin==7.1.0  # Latest as of Jul 31, 2025
 
-# AI/ML Framework (for future LLM integration)
-langchain==0.1.0
-langchain-openai==0.0.5
-langgraph==0.0.20
+# AI/ML Framework
+langchain==1.0.2  # Latest as of Oct 2025
+langchain-openai==1.0.1  # Latest as of Oct 21, 2025
+langgraph==1.0.1  # Latest as of Oct 20, 2025
+
+# Vector Database and Embeddings
+qdrant-client==1.13.0  # Latest as of Jan 17, 2025
+openai==2.5.0  # Latest as of Oct 2025
+tiktoken==0.12.0  # Latest as of Oct 6, 2025
 
 # HTTP Client
-httpx==0.26.0
+httpx==0.28.1  # Latest as of 2025

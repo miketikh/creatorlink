@@ -91,7 +91,7 @@ class FirebaseClient:
 
         Args:
             conversation_id: ID of the conversation
-            sender_id: ID of the message sender (e.g., "ai-agent")
+            sender_id: ID of the message sender (e.g., "ai-assistant")
             text: Message text content
             participant_ids: List of participant user IDs
             metadata: Optional metadata dict (e.g., {"ai_generated": True})
