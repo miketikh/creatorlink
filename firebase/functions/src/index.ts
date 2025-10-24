@@ -12,6 +12,12 @@ import {detectIfQuestion} from "./ai";
 import {fetchConversationMessages} from "./ai/lib/message-fetcher";
 import {findFAQMatch} from "./ai/lib/faq-matcher";
 import {writeAIResponse} from "./ai/lib/response-writer";
+import {
+  categorizeConversation,
+  fetchConversationContext,
+  shouldAnalyzeMessage,
+  updateConversationTags,
+} from "./ai";
 
 // Initialize Firebase Admin SDK
 admin.initializeApp();
@@ -46,165 +52,254 @@ export const onMessageCreated = onDocumentCreated(
       conversationId: messageData?.conversationId,
     });
 
-    // Check if it's a group chat using denormalized participantIds
-    // Group chats have 3+ participants (one-on-one chats have exactly 2)
+    // Extract common message data
     const participantIds = messageData?.participantIds || [];
     const conversationId = messageData?.conversationId || "";
+    const messageText = messageData?.text || "";
     const isGroupChat = participantIds.length > 2;
 
-    if (!isGroupChat) {
-      logger.info("Not a group chat, skipping AI processing", {
+    // FEATURE 1: Group Chat FAQ Detection (only for group chats with AI enabled)
+    if (isGroupChat) {
+      logger.info("Group chat message detected, checking if it's a question", {
         messageId,
         conversationId,
         participantCount: participantIds.length,
       });
-      return null;
-    }
 
-    logger.info("Group chat message detected, checking if it's a question", {
-      messageId,
-      conversationId,
-      participantCount: participantIds.length,
-    });
+      // Detect if the message is a question
+      if (!messageText.trim()) {
+        logger.info("Empty message text, skipping question detection", {
+          messageId,
+        });
+      } else {
+        const questionResult = await detectIfQuestion(messageText);
 
-    // Detect if the message is a question
-    const messageText = messageData?.text || "";
-    if (!messageText.trim()) {
-      logger.info("Empty message text, skipping question detection", {
-        messageId,
-      });
-      return null;
-    }
+        logger.info("Question detection result", {
+          messageId,
+          conversationId,
+          isQuestion: questionResult.isQuestion,
+          confidence: questionResult.confidence,
+          messageText: messageText.substring(0, 100), // Log first 100 chars
+        });
 
-    const questionResult = await detectIfQuestion(messageText);
+        if (questionResult.isQuestion) {
+          logger.info("✅ Group chat QUESTION detected", {
+            messageId,
+            conversationId,
+            confidence: questionResult.confidence,
+            messagePreview: messageText.substring(0, 50),
+          });
 
-    logger.info("Question detection result", {
-      messageId,
-      conversationId,
-      isQuestion: questionResult.isQuestion,
-      confidence: questionResult.confidence,
-      messageText: messageText.substring(0, 100), // Log first 100 chars
-    });
+          // Check if AI is enabled (AI assistant must be a participant)
+          const isAIEnabled = participantIds.includes(AI_USER_ID);
 
-    if (questionResult.isQuestion) {
-      logger.info("✅ Group chat QUESTION detected", {
+          if (!isAIEnabled) {
+            logger.info("AI not enabled for this conversation, skipping FAQ detection", {
+              messageId,
+              conversationId,
+            });
+          } else {
+            logger.info("AI enabled, processing question for FAQ detection", {
+              messageId,
+              conversationId,
+            });
+
+            try {
+              // Fetch all conversation messages
+              const allMessages = await fetchConversationMessages(
+                conversationId,
+                100
+              );
+
+              if (allMessages.length === 0) {
+                logger.info("No conversation history found, skipping FAQ detection", {
+                  conversationId,
+                  messageId,
+                });
+              } else {
+                // Find current message index
+                const currentMessageIndex = allMessages.findIndex(msg => msg.id === messageId);
+
+                if (currentMessageIndex === -1) {
+                  logger.warn("Current message not found in conversation history", {
+                    conversationId,
+                    messageId,
+                  });
+                } else {
+                  // Split messages into before and after current question
+                  const previousMessages = allMessages.slice(0, currentMessageIndex);
+                  const followingMessages = allMessages.slice(currentMessageIndex + 1);
+
+                  if (previousMessages.length === 0) {
+                    logger.info("No previous messages, skipping FAQ detection", {
+                      conversationId,
+                      messageId,
+                    });
+                  } else {
+                    // Let AI analyze with separate before/after contexts
+                    const faqMatch = await findFAQMatch(
+                      messageText,
+                      previousMessages,
+                      followingMessages,
+                      0.85
+                    );
+
+                    if (!faqMatch.hasMatch) {
+                      logger.info("No FAQ match found", {
+                        conversationId,
+                        messageId,
+                        confidence: faqMatch.confidence,
+                      });
+                    } else {
+                      logger.info("✅ FAQ match found! Writing AI response", {
+                        conversationId,
+                        messageId,
+                        confidence: faqMatch.confidence,
+                        matchedQuestionId: faqMatch.matchedQuestionMessageId,
+                        matchedAnswerId: faqMatch.matchedAnswerMessageId,
+                      });
+
+                      // Write AI response
+                      const writeResult = await writeAIResponse(
+                        conversationId,
+                        participantIds,
+                        faqMatch
+                      );
+
+                      if (writeResult.success) {
+                        logger.info("🎉 AI response written successfully", {
+                          conversationId,
+                          aiMessageId: writeResult.messageId,
+                        });
+                      } else {
+                        logger.error("Failed to write AI response", {
+                          conversationId,
+                          error: writeResult.error,
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              logger.error("Error processing FAQ detection", {
+                conversationId,
+                messageId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          }
+        } else {
+          logger.info("ℹ️ Group chat message is NOT a question", {
+            messageId,
+            conversationId,
+            confidence: questionResult.confidence,
+          });
+        }
+      }
+    } else {
+      logger.info("Not a group chat, skipping FAQ detection", {
         messageId,
         conversationId,
-        confidence: questionResult.confidence,
-        messagePreview: messageText.substring(0, 50),
+        participantCount: participantIds.length,
       });
+    }
 
-      // Check if AI is enabled (AI assistant must be a participant)
-      const isAIEnabled = participantIds.includes(AI_USER_ID);
+    // PHASE 5: AI Auto-Tagging - Categorize all conversations (not just group chats)
+    // This runs independently of FAQ detection and question checking
+    try {
+      // Check feature flag (default enabled)
+      const categorizationEnabled = process.env.ENABLE_AUTO_CATEGORIZATION !== "false";
 
-      if (!isAIEnabled) {
-        logger.info("AI not enabled for this conversation, skipping FAQ detection", {
-          messageId,
+      if (!categorizationEnabled) {
+        logger.info("Auto-categorization disabled by feature flag", {
           conversationId,
         });
         return null;
       }
 
-      logger.info("AI enabled, processing question for FAQ detection", {
-        messageId,
+      // Check if this message should be analyzed
+      const shouldAnalyze = await shouldAnalyzeMessage(messageData, conversationId);
+
+      if (!shouldAnalyze) {
+        logger.info("Skipping categorization based on analysis rules", {
+          conversationId,
+          messageId,
+        });
+        return null;
+      }
+
+      logger.info("Starting conversation categorization", {
         conversationId,
+        messageId,
       });
 
-      try {
-        // Fetch all conversation messages
-        const allMessages = await fetchConversationMessages(
+      // Fetch conversation context (last 10 messages)
+      const conversationContext = await fetchConversationContext(conversationId, 10);
+
+      if (conversationContext.length === 0) {
+        logger.info("No conversation context found, skipping categorization", {
           conversationId,
-          100
-        );
-
-        if (allMessages.length === 0) {
-          logger.info("No conversation history found, skipping FAQ detection", {
-            conversationId,
-            messageId,
-          });
-          return null;
-        }
-
-        // Find current message index
-        const currentMessageIndex = allMessages.findIndex(msg => msg.id === messageId);
-
-        if (currentMessageIndex === -1) {
-          logger.warn("Current message not found in conversation history", {
-            conversationId,
-            messageId,
-          });
-          return null;
-        }
-
-        // Split messages into before and after current question
-        const previousMessages = allMessages.slice(0, currentMessageIndex);
-        const followingMessages = allMessages.slice(currentMessageIndex + 1);
-
-        if (previousMessages.length === 0) {
-          logger.info("No previous messages, skipping FAQ detection", {
-            conversationId,
-            messageId,
-          });
-          return null;
-        }
-
-        // Let AI analyze with separate before/after contexts
-        const faqMatch = await findFAQMatch(
-          messageText,
-          previousMessages,
-          followingMessages,
-          0.85
-        );
-
-        if (!faqMatch.hasMatch) {
-          logger.info("No FAQ match found", {
-            conversationId,
-            messageId,
-            confidence: faqMatch.confidence,
-          });
-          return null;
-        }
-
-        logger.info("✅ FAQ match found! Writing AI response", {
-          conversationId,
-          messageId,
-          confidence: faqMatch.confidence,
-          matchedQuestionId: faqMatch.matchedQuestionMessageId,
-          matchedAnswerId: faqMatch.matchedAnswerMessageId,
         });
+        return null;
+      }
 
-        // Write AI response
-        const writeResult = await writeAIResponse(
+      // Fetch existing category from conversation document
+      const conversationDoc = await admin.firestore()
+        .collection("conversations")
+        .doc(conversationId)
+        .get();
+
+      const existingCategory = conversationDoc.data()?.primaryCategory;
+
+      // Categorize the conversation
+      // Pass participant info so AI can assign per-user status tags
+      const categorizationResult = await categorizeConversation(
+        messageText,
+        conversationContext,
+        existingCategory,
+        conversationId,
+        participantIds,
+        messageData?.senderId
+      );
+
+      logger.info("Categorization result", {
+        conversationId,
+        category: categorizationResult.category.category,
+        confidence: categorizationResult.category.confidence,
+        statusTagsByUser: categorizationResult.status.statusTagsByUser,
+      });
+
+      // Update conversation tags in Firestore
+      // Pass message sender and participants for per-user status tags
+      const updateSuccess = await updateConversationTags(
+        conversationId,
+        categorizationResult,
+        messageData?.senderId,
+        participantIds
+      );
+
+      if (updateSuccess) {
+        logger.info("✅ Conversation tags updated successfully", {
           conversationId,
-          participantIds,
-          faqMatch
-        );
-
-        if (writeResult.success) {
-          logger.info("🎉 AI response written successfully", {
-            conversationId,
-            aiMessageId: writeResult.messageId,
-          });
-        } else {
-          logger.error("Failed to write AI response", {
-            conversationId,
-            error: writeResult.error,
-          });
-        }
-
-      } catch (error) {
-        logger.error("Error processing FAQ detection", {
+          category: categorizationResult.category.category,
+          statusTagsByUser: categorizationResult.status.statusTagsByUser,
+          lastMessageSender: messageData?.senderId,
+        });
+      } else {
+        logger.info("Tag update skipped (low confidence or other reason)", {
           conversationId,
-          messageId,
-          error: error instanceof Error ? error.message : String(error),
+          confidence: categorizationResult.category.confidence,
         });
       }
-    } else {
-      logger.info("ℹ️ Group chat message is NOT a question", {
-        messageId,
+
+    } catch (error) {
+      logger.error("Error during conversation categorization", {
         conversationId,
-        confidence: questionResult.confidence,
+        messageId,
+        error: error instanceof Error ? error.message : String(error),
       });
+      // Don't throw - categorization errors shouldn't fail the entire function
     }
 
     return null;

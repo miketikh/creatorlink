@@ -31,12 +31,14 @@ const db = admin.firestore();
 const seedGeneric = require('./seed-files/generic');
 const seedAIGroup = require('./seed-files/ai-group-nofunction');
 const seedAIGroupTest = require('./seed-files/ai-group-test');
+const seedAICategorization = require('./seed-files/ai-categorization');
 
 // Map of seed types to seed functions
 const SEED_TYPES = {
   'generic': seedGeneric,
   'ai-group': seedAIGroup,
-  'ai-group-test': seedAIGroupTest
+  'ai-group-test': seedAIGroupTest,
+  'ai-categorization': seedAICategorization
 };
 
 // Parse command line arguments

@@ -79,19 +79,19 @@ This phase extends the existing Firebase Cloud Functions to automatically catego
 **Goal:** Define TypeScript interfaces for AI categorization results and create reusable type definitions.
 
 **Tasks:**
-- [ ] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/types.ts` to understand existing AI types
-- [ ] Add new interfaces to `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/types.ts`:
+- [x] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/types.ts` to understand existing AI types
+- [x] Add new interfaces to `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/types.ts`:
   - `CategoryDetectionResult` interface with category, confidence, reasoning fields
   - `StatusDetectionResult` interface with status array, urgency info, detected deadlines
   - `CategorizationResult` interface combining category and status results
   - `TagUpdatePayload` interface for Firestore update data
-- [ ] Add enums matching Swift models:
+- [x] Add enums matching Swift models:
   - `ConversationCategory` enum (Business, Collaboration, Social, Fan)
   - `StatusTag` enum (Urgent, NeedsResponse, AwaitingReply, Resolved)
-- [ ] Add type guards for validation:
+- [x] Add type guards for validation:
   - `isCategoryValid()` type guard function
   - `isStatusValid()` type guard function
-- [ ] Export all new types for use in other modules
+- [x] Export all new types for use in other modules
 
 **What to Test:**
 1. Build functions - verify no TypeScript errors: `cd /Users/Gauntlet/gauntlet/CreatorLink/firebase/functions && npm run build`
@@ -115,9 +115,9 @@ This phase extends the existing Firebase Cloud Functions to automatically catego
 **Goal:** Create AI helper function that analyzes message content and returns category/status suggestions.
 
 **Tasks:**
-- [ ] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/question-detector.ts` to understand existing OpenAI patterns
-- [ ] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/categorizer.ts`
-- [ ] Implement `categorizeConversation()` function:
+- [x] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/question-detector.ts` to understand existing OpenAI patterns
+- [x] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/categorizer.ts`
+- [x] Implement `categorizeConversation()` function:
   - Accept parameters: messageText, conversationHistory (last 5-10 messages), existingCategory
   - Use `getOpenAIClient()` from `../client`
   - Create system prompt with categorization rules:
@@ -135,11 +135,11 @@ This phase extends the existing Firebase Cloud Functions to automatically catego
   - Set temperature to 0.3 for consistent categorization
   - Parse and validate response
   - Return CategorizationResult with all fields populated
-- [ ] Add error handling:
+- [x] Add error handling:
   - Catch OpenAI API errors
   - Return safe default on error (Social category, empty status, 0 confidence)
   - Log errors with context
-- [ ] Add duration logging for performance monitoring
+- [x] Add duration logging for performance monitoring
 
 **What to Test:**
 1. Build functions - verify no compilation errors
@@ -170,21 +170,21 @@ This phase extends the existing Firebase Cloud Functions to automatically catego
 **Goal:** Create helper to fetch recent conversation messages for AI context analysis.
 
 **Tasks:**
-- [ ] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/message-fetcher.ts` to understand existing message fetching patterns
-- [ ] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/conversation-context.ts`
-- [ ] Implement `fetchConversationContext()` function:
+- [x] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/message-fetcher.ts` to understand existing message fetching patterns
+- [x] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/conversation-context.ts`
+- [x] Implement `fetchConversationContext()` function:
   - Accept parameters: conversationId, messageLimit (default 10)
   - Use Firebase Admin SDK to query messages collection
   - Query: `.where('conversationId', '==', conversationId).orderBy('timestamp', 'desc').limit(messageLimit)`
   - Return array of message objects with: id, text, senderId, timestamp, metadata
   - Handle empty results gracefully
   - Add error handling and logging
-- [ ] Implement `shouldAnalyzeMessage()` helper:
+- [x] Implement `shouldAnalyzeMessage()` helper:
   - Check if message is from AI user (skip AI messages)
   - Check if conversation has userOverrideTags flag set (respect user overrides)
   - Check last analysis timestamp (don't re-analyze within 5 minutes)
   - Return boolean indicating whether to analyze
-- [ ] Add caching logic for rate limiting:
+- [x] Add caching logic for rate limiting:
   - Store last analysis timestamp in conversation metadata
   - Compare with current timestamp
   - Return early if analyzed recently
@@ -220,9 +220,9 @@ This phase extends the existing Firebase Cloud Functions to automatically catego
 **Goal:** Create helper to write AI-suggested tags to Firestore conversations safely.
 
 **Tasks:**
-- [ ] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/response-writer.ts` to understand existing Firestore write patterns
-- [ ] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/tag-writer.ts`
-- [ ] Implement `updateConversationTags()` function:
+- [x] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/response-writer.ts` to understand existing Firestore write patterns
+- [x] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/tag-writer.ts`
+- [x] Implement `updateConversationTags()` function:
   - Accept parameters: conversationId, categorizationResult, minimumConfidence (default 0.75)
   - Validate confidence threshold - only update if confidence >= minimumConfidence
   - Construct Firestore update payload:
@@ -234,11 +234,11 @@ This phase extends the existing Firebase Cloud Functions to automatically catego
   - Use Firestore transaction for atomic updates
   - Check userOverrideTags flag before writing (extra safety)
   - Log successful updates with category and confidence
-- [ ] Implement `calculatePrimaryCategory()` helper:
+- [x] Implement `calculatePrimaryCategory()` helper:
   - If existing category and new category have similar confidence, keep existing
   - Otherwise return category with highest confidence
   - Handles category stability (prevents constant switching)
-- [ ] Add error handling:
+- [x] Add error handling:
   - Catch Firestore write errors
   - Log errors with conversation context
   - Don't throw (let function complete gracefully)
@@ -273,27 +273,27 @@ This phase extends the existing Firebase Cloud Functions to automatically catego
 **Goal:** Extend existing onMessageCreated function to automatically categorize conversations.
 
 **Tasks:**
-- [ ] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/index.ts` to understand existing message trigger
-- [ ] Import new AI helpers in index.ts:
+- [x] Read `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/index.ts` to understand existing message trigger
+- [x] Import new AI helpers in index.ts:
   - `fetchConversationContext` from `./ai/lib/conversation-context`
   - `categorizeConversation` from `./ai/lib/categorizer`
   - `updateConversationTags` from `./ai/lib/tag-writer`
   - `shouldAnalyzeMessage` from `./ai/lib/conversation-context`
-- [ ] Add categorization logic to `onMessageCreated` function AFTER existing FAQ detection:
+- [x] Add categorization logic to `onMessageCreated` function AFTER existing FAQ detection:
   - Check if message should be analyzed with `shouldAnalyzeMessage()`
   - Fetch conversation context with `fetchConversationContext()`
   - Get conversation document to check for existing category
   - Call `categorizeConversation()` with message and context
   - Call `updateConversationTags()` with categorization result
   - Log categorization results (category, confidence, status tags)
-- [ ] Add environment variable check for feature flag:
+- [x] Add environment variable check for feature flag:
   - Check `process.env.ENABLE_AUTO_CATEGORIZATION` (default true)
   - Skip categorization if disabled (for gradual rollout)
-- [ ] Ensure categorization doesn't interfere with FAQ detection:
+- [x] Ensure categorization doesn't interfere with FAQ detection:
   - Run categorization independent of question detection
   - Both can run for same message
   - Categorization runs even if not a question
-- [ ] Add comprehensive logging:
+- [x] Add comprehensive logging:
   - Log when categorization starts
   - Log categorization result (category, confidence, status)
   - Log when tags are updated in Firestore
@@ -333,30 +333,30 @@ This phase extends the existing Firebase Cloud Functions to automatically catego
 **Goal:** Implement advanced rate limiting, caching, and cost controls for AI categorization.
 
 **Tasks:**
-- [ ] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/rate-limiter.ts`
-- [ ] Implement in-memory cache for recent categorizations:
+- [x] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/ai/lib/rate-limiter.ts`
+- [x] Implement in-memory cache for recent categorizations:
   - Use Map to store conversationId → {result, timestamp}
   - Set cache TTL to 5 minutes (matches analysis cooldown)
   - Implement `getCachedResult()` function
   - Implement `setCachedResult()` function
   - Add cache cleanup on TTL expiration
-- [ ] Implement per-conversation rate limiting:
+- [x] Implement per-conversation rate limiting:
   - Track last analysis timestamp in Firestore (added in PR 5.4)
   - Implement `checkRateLimit()` function
   - Return early if analyzed within cooldown period
   - Log rate limit hits for monitoring
-- [ ] Implement global rate limiting:
+- [x] Implement global rate limiting:
   - Track total API calls per minute/hour
   - Implement `incrementAPICallCounter()` function
   - Check against configurable threshold (e.g., 60 calls/minute)
   - Return early if threshold exceeded
   - Log when hitting global limits
-- [ ] Add cost tracking:
+- [x] Add cost tracking:
   - Estimate tokens used per categorization (~500 tokens average)
   - Log estimated cost per call (GPT-4o-mini pricing)
   - Track cumulative cost in logs
   - Add warning when approaching budget threshold
-- [ ] Add configuration management:
+- [x] Add configuration management:
   - Create config object with:
     - `CACHE_TTL_SECONDS`: 300 (5 minutes)
     - `PER_CONVERSATION_COOLDOWN_SECONDS`: 300

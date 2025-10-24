@@ -103,17 +103,30 @@ struct AuthView: View {
 
             #if DEBUG
             // TODO: Remove before production release
-            // Debug-only shortcut for faster testing
-            Button(action: {
-                Task {
-                    await signInAsAlice()
+            // Debug-only shortcuts for faster testing
+            HStack(spacing: 16) {
+                Button(action: {
+                    Task {
+                        await signInAsAlice()
+                    }
+                }) {
+                    Text("Sign in as Alice")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
-            }) {
-                Text("Sign in as Alice")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                .disabled(isSigningIn)
+
+                Button(action: {
+                    Task {
+                        await signInAsBob()
+                    }
+                }) {
+                    Text("Sign in as Bob")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .disabled(isSigningIn)
             }
-            .disabled(isSigningIn)
             .padding(.top, 8)
             #endif
 
@@ -147,6 +160,22 @@ struct AuthView: View {
         do {
             _ = try await authService.signInWithEmail(
                 email: "alice.johnson@test.com",
+                password: "password"
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isSigningIn = false
+    }
+
+    private func signInAsBob() async {
+        isSigningIn = true
+        errorMessage = nil
+
+        do {
+            _ = try await authService.signInWithEmail(
+                email: "bob.martinez@test.com",
                 password: "password"
             )
         } catch {
