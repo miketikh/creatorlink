@@ -9,10 +9,25 @@
 ## Executive Summary
 
 This plan outlines the implementation of an intelligent FAQ detection system that:
-- Detects questions in group chats using vector similarity search
-- Automatically links to previous answers from conversation history
-- Uses OpenAI embeddings and Qdrant vector database
+- Pairs questions with answers using GPT-4o-mini context analysis
+- Creates embeddings for Q+A PAIRS (not separate questions/answers)
+- Automatically links new questions to previous answers via vector similarity
+- Uses OpenAI GPT-4o-mini, text-embedding-3-small, and Qdrant vector database
 - Integrates with existing Firebase Cloud Functions trigger
+
+**UPDATED ARCHITECTURE (October 23, 2025):**
+This plan uses a **context-based Q+A detection approach** instead of brittle heuristics:
+1. **Firebase Cloud Function** fetches last 5 messages as context
+2. **Python service** uses GPT-4o-mini to detect if new message answers any question in context
+3. If YES: Create SINGLE embedding for "Question: {q}\nAnswer: {a}" pair
+4. If NO: Don't create embedding
+5. **FAQ search** searches Q+A pair embeddings, answer already in metadata
+
+**Benefits over original heuristic approach:**
+- Handles short answers: "$30", "7pm", "yes" (would fail heuristic detection)
+- Understands semantic relationships, not just pattern matching
+- Simpler vector search (Q+A pairs vs separate question/answer vectors)
+- No complex Firestore queries to find answers (already paired in metadata)
 
 **Current State:**
 - FastAPI service (`/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/main.py`) processes messages via `/process-message` endpoint
@@ -68,7 +83,7 @@ Key responsibilities:
 - Search similar questions by conversation ID
 - Handle connection health checks
 
-**Collection Schema:**
+**Collection Schema (UPDATED for Q+A Pairs):**
 ```python
 {
     "vectors": {
@@ -76,17 +91,25 @@ Key responsibilities:
         "distance": "Cosine"  # Best for semantic similarity
     },
     "payload_schema": {
-        "messageId": "keyword",  # Index for lookups
+        # Q+A Pair Metadata
         "conversationId": "keyword",  # Critical for filtering
-        "userId": "keyword",
-        "text": "text",  # Full-text search capability
-        "timestamp": "integer",
-        "isQuestion": "bool",  # Index for filtering
-        "isAnswer": "bool",
+        "questionText": "text",  # Original question
+        "answerText": "text",  # Original answer
+        "questionMessageId": "keyword",  # Link to question message
+        "answerMessageId": "keyword",  # Link to answer message
+        "questionSenderId": "keyword",  # Who asked
+        "answerSenderId": "keyword",  # Who answered
+        "timestamp": "integer",  # Answer timestamp
+        "confidence": "float",  # GPT-4o-mini confidence (0.0-1.0)
         "participantIds": "keyword[]"  # Array of user IDs
     }
 }
 ```
+
+**Key Changes from Original Plan:**
+- **REMOVED:** `isQuestion` and `isAnswer` flags (all embeddings are Q+A pairs now)
+- **ADDED:** Separate fields for question and answer text/IDs
+- **ADDED:** `confidence` score from GPT-4o-mini detection
 
 #### 4. Docker Setup for Local Development
 Create `/Users/Gauntlet/gauntlet/CreatorLink/python-service/docker-compose.yml`:
@@ -112,18 +135,37 @@ services:
 ## Phase 2: Message Embedding Pipeline
 
 ### Goal
-Generate embeddings for all messages in AI-enabled conversations using OpenAI's latest models and store them efficiently.
+Generate embeddings for Question+Answer PAIRS in AI-enabled conversations using context-based GPT-4o-mini detection and OpenAI embeddings.
 
-### Technology Choice: OpenAI text-embedding-3-small
+### Technology Choice: GPT-4o-mini + text-embedding-3-small
 
-**Why text-embedding-3-small (2025 recommendation):**
+**Why GPT-4o-mini for Q+A Detection (2025 recommendation):**
+- **Context-aware:** Understands semantic relationships between messages
+- **Cost-effective:** $0.15/$0.60 per 1M tokens (input/output) = ~$0.0001 per message pair
+- **Accurate:** Handles ambiguous answers like "$30" or "7pm" that heuristics miss
+- **Simple integration:** Single API call replaces complex pattern matching
+
+**Why text-embedding-3-small for Embeddings:**
 - **Cost-effective:** $0.02 per 1M tokens (vs $0.13 for text-embedding-3-large)
 - **Fast processing:** Lower latency for real-time embedding generation
 - **Good accuracy:** 75.8% on RAG benchmarks (sufficient for FAQ matching)
-- **Dimension flexibility:** 1536 default, can reduce to 512 via Matryoshka for even faster search
 - **Proven at scale:** OpenAI's production-ready infrastructure
 
-**Alternative considered:** text-embedding-3-large (better accuracy at 80.5% but 6.5x more expensive and slower - overkill for this use case)
+### NEW APPROACH: Context-Based Q+A Detection
+
+**Key Change from Original Plan:**
+Instead of detecting questions/answers separately with brittle heuristics, we:
+1. Firebase Cloud Function sends new message WITH last 5 messages as context
+2. Python service uses GPT-4o-mini to analyze: "Does this message answer any question in the context?"
+3. If YES: Create SINGLE embedding for Q+A pair combined
+4. If NO: Don't create any embedding
+5. Store both question and answer text in metadata (no separate vectors)
+
+**Benefits:**
+- No false pairings from heuristics like "contains '?'"
+- Handles short answers: "$30", "7pm", "yes", "tomorrow"
+- Works with implicit questions: "anyone free?" → "I am!"
+- Simpler vector search (search Q+A pairs, not separate questions)
 
 ### Implementation Tasks
 
@@ -135,7 +177,7 @@ langchain-openai==0.0.5
 
 Add:
 ```
-openai==1.52.0  # Latest 2025 stable SDK
+openai==1.52.0  # Latest 2025 stable SDK for GPT-4o-mini + embeddings
 tiktoken==0.7.0  # Token counting for cost estimation
 ```
 
@@ -144,8 +186,12 @@ Update `.env`:
 ```bash
 # OpenAI Configuration
 OPENAI_API_KEY=sk-proj-...  # User must provide
+OPENAI_CHAT_MODEL=gpt-4o-mini  # For Q+A detection
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 OPENAI_EMBEDDING_DIMENSIONS=1536
+
+# Q+A Detection Thresholds
+QA_CONFIDENCE_THRESHOLD=0.7  # Minimum confidence to pair question+answer
 ```
 
 #### 3. Create New Module: `embeddings.py`
@@ -162,10 +208,10 @@ Key responsibilities:
 ```python
 async def generate_embedding(text: str) -> List[float]:
     """
-    Generate embedding vector for message text.
+    Generate embedding vector for combined Q+A text.
+    - Input format: "Question: {question_text}\nAnswer: {answer_text}"
     - Handles empty strings gracefully
     - Implements retry with exponential backoff
-    - Caches embeddings (optional future enhancement)
     """
 
 async def batch_generate_embeddings(texts: List[str]) -> List[List[float]]:
@@ -176,63 +222,136 @@ async def batch_generate_embeddings(texts: List[str]) -> List[List[float]]:
     """
 ```
 
-#### 4. Question vs Answer Detection Logic
-File: `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/text_analysis.py`
+#### 4. Create New Module: `qa_detector.py`
+File: `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/qa_detector.py`
 
-**Question Detection Heuristics:**
+**NEW MODULE - Replaces text_analysis.py from original plan**
+
+Key responsibilities:
+- Use GPT-4o-mini to detect Q+A pairs in context
+- Return confidence score and matched question/answer
+- Handle edge cases (multiple questions, no clear answer)
+
+**Q+A Detection Logic:**
 ```python
-def is_question(text: str) -> bool:
+async def detect_qa_pair(
+    new_message: str,
+    context_messages: List[Dict[str, Any]]
+) -> Optional[QAPair]:
     """
-    Detect if message is a question using multiple signals:
-    1. Contains question mark (?)
-    2. Starts with question words (how, what, when, where, why, which, who)
-    3. Starts with auxiliary verbs (can, do, does, is, are, was, were, will, would, could, should)
-    4. Contains question patterns ("anyone know", "does anyone", etc.)
+    Use GPT-4o-mini to detect if new message answers any question in context.
 
-    Returns: True if message is likely a question
+    Args:
+        new_message: The incoming message text
+        context_messages: Last 5 messages with {text, senderId, timestamp}
+
+    Returns:
+        QAPair with:
+            - question_text: The question being answered
+            - question_message_id: Original question message ID
+            - answer_text: The answer text (new_message)
+            - answer_message_id: New message ID
+            - confidence: 0.0-1.0 score from GPT
+        OR None if no Q+A pair detected
+
+    GPT-4o-mini Prompt:
+        "Analyze this conversation context and determine if the new message
+         answers any question in the context. Consider:
+         - Explicit questions (containing '?')
+         - Implicit questions ('anyone free?', 'thoughts?')
+         - Short answers ('$30', '7pm', 'yes')
+
+         Return JSON: {
+            'is_answer': bool,
+            'question_index': int (0-4, which context message is the question),
+            'confidence': float (0.0-1.0)
+         }"
+
+    Confidence Threshold:
+        - >= 0.7: Accept as valid Q+A pair
+        - < 0.7: Reject, don't create embedding
     """
 
-def is_answer(text: str, follows_question: bool, sender_is_user: bool) -> bool:
-    """
-    Detect if message is an answer based on context:
-    1. Follows a question within 2-3 messages
-    2. Sender is a participant (not "system" or "ai-agent")
-    3. Length > 10 characters (filters out "👍", "ok", etc.)
-
-    Returns: True if message is likely an answer
-    """
+@dataclass
+class QAPair:
+    question_text: str
+    question_message_id: str
+    answer_text: str
+    answer_message_id: str
+    confidence: float
 ```
 
-#### 5. Real-time Embedding Pipeline
+**Cost Estimation for GPT-4o-mini:**
+- Input tokens: ~200 tokens (5 context messages + system prompt)
+- Output tokens: ~50 tokens (JSON response)
+- Cost per call: $0.15/1M × 200 + $0.60/1M × 50 = $0.00006
+- Daily volume: 10,000 messages = $0.60/day = $18/month
+
+#### 5. Update Request Model
+File: `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/main.py`
+
+**NEW: Add context field to MessageRequest:**
+```python
+class MessageRequest(BaseModel):
+    messageId: str
+    conversationId: str
+    senderId: str
+    text: str
+    timestamp: dict
+    participantIds: List[str]
+    context: List[Dict[str, Any]]  # NEW: Last 5 messages for Q+A detection
+
+class ContextMessage(BaseModel):  # NEW
+    messageId: str
+    text: str
+    senderId: str
+    timestamp: dict
+```
+
+#### 6. Real-time Q+A Embedding Pipeline
 **Trigger:** Every new message in AI-enabled conversations
 
-**Workflow:**
+**NEW Workflow:**
 ```
-New Message → Firebase Function → Python /process-message endpoint
+New Message → Firebase Function (fetch last 5 messages)
              ↓
-Check: Is conversation.aiEnabled == true?
+Send message + context to Python /process-message
              ↓
-Classify: is_question() or is_answer()
+GPT-4o-mini: "Does new message answer any question in context?"
              ↓
-Generate embedding (async, non-blocking)
+If YES (confidence >= 0.7):
+    - Create combined text: "Question: {q}\nAnswer: {a}"
+    - Generate embedding for Q+A pair
+    - Store in Qdrant with metadata:
+        * questionText, answerText
+        * questionMessageId, answerMessageId
+        * confidence score
              ↓
-Store in Qdrant with metadata
-             ↓
-Continue to FAQ detection (if question)
+If NO:
+    - Don't create embedding
+    - Continue without FAQ detection
 ```
 
 ### Performance Considerations
-- **Async execution:** Don't block message processing waiting for embeddings
-- **Token optimization:** Truncate messages >8,191 tokens (text-embedding-3-small max)
-- **Cost monitoring:** ~1,000 messages/day @ avg 50 tokens = $0.001/day (negligible)
-- **Caching strategy:** Consider Redis for frequently embedded phrases (future optimization)
+- **GPT cost:** ~$0.0001 per message (GPT-4o-mini analysis)
+- **Embedding cost:** Only for Q+A pairs (~10-20% of messages) = $0.0001 per pair
+- **Total daily cost:** 10K messages × 20% pairs × $0.0001 = $0.20/day
+- **Latency:** GPT-4o-mini response in ~200ms, embedding in ~100ms
+- **Token optimization:** Truncate context messages to 100 chars each
 
 ---
 
 ## Phase 3: FAQ Detection Service
 
 ### Goal
-Implement intelligent question detection and similarity search to automatically link new questions to previous answers.
+Implement intelligent similarity search to automatically link new questions to previous Q+A pairs stored in the vector database.
+
+### SIMPLIFIED APPROACH
+Since Q+A pairing happens in Phase 2, this phase only needs to:
+1. Detect if new message is a question
+2. Search for similar Q+A PAIRS (not separate questions)
+3. Answer is already in metadata - no Firestore lookup needed!
+4. Post AI response with link to answer
 
 ### Implementation Tasks
 
@@ -240,8 +359,8 @@ Implement intelligent question detection and similarity search to automatically 
 File: `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/faq_service.py`
 
 Key responsibilities:
-- Detect and respond to FAQ opportunities
-- Query vector database for similar questions
+- Detect if new message is a question (simple heuristics OK here)
+- Query vector database for similar Q+A pairs
 - Apply confidence thresholds
 - Format AI response messages
 - Handle edge cases (loops, deleted messages, etc.)
@@ -260,7 +379,7 @@ class FAQRequest:
     participantIds: List[str]
 ```
 
-**Decision Logic:**
+**SIMPLIFIED Decision Logic:**
 ```python
 async def detect_and_respond_faq(request: FAQRequest) -> Optional[str]:
     """
@@ -268,25 +387,29 @@ async def detect_and_respond_faq(request: FAQRequest) -> Optional[str]:
 
     Step 1: Pre-checks
         - Is sender != "ai-assistant"? (prevent loops)
-        - Does message match question pattern?
+        - Does message look like a question? (contains '?' or starts with question word)
         - If no → return None (do nothing)
 
     Step 2: Embed the question
         - Generate vector using OpenAI embedding
+        - Format: "Question: {new_question_text}"
 
-    Step 3: Query vector database
-        - Search for similar questions in SAME conversation
-        - Filter: conversationId AND isQuestion=true
-        - Return top 3 matches above 0.85 similarity
+    Step 3: Query vector database for Q+A pairs
+        - Search for similar Q+A pair embeddings in SAME conversation
+        - Filter: conversationId only (all stored embeddings are Q+A pairs)
+        - Return top 1 match above 0.85 similarity
 
     Step 4: Confidence-based decision
         similarity >= 0.90 → High confidence, post immediately
         similarity 0.85-0.89 → Medium confidence, post with disclaimer
         similarity < 0.85 → No match, do nothing
 
-    Step 5: Fetch original answer
-        - Query Firestore for messages after matched question
-        - Find first participant message (not system/AI)
+    Step 5: Extract answer from metadata (NO FIRESTORE LOOKUP!)
+        - Matched vector already contains:
+            * questionText (original question)
+            * answerText (original answer)
+            * questionMessageId (for linking)
+            * answerMessageId (for linking)
 
     Step 6: Create AI response
         - Write to Firestore with faqReference metadata
@@ -300,8 +423,8 @@ async def detect_and_respond_faq(request: FAQRequest) -> Optional[str]:
 
 **High Confidence (>= 0.90):**
 ```
-Response: "💡 This question was asked before! @{answerer} answered it on {date}:"
-Action: Post immediately, link directly to answer
+Response: "💡 This question was asked before! @{answerer} answered it:"
+Action: Post immediately, link directly to answer message
 ```
 
 **Medium Confidence (0.85-0.89):**
@@ -318,7 +441,7 @@ Action: Do nothing (avoid cluttering chat with low-quality matches)
 
 **Rationale for 0.85 threshold:**
 - Based on 2025 embedding model benchmarks, cosine similarity >0.85 indicates strong semantic overlap
-- Tested against duplicate question datasets (Quora, Stack Overflow)
+- Embeddings are Q+A pairs, so matching is more reliable than question-only
 - Balances precision vs recall for user experience
 
 #### 3. Edge Case Handling
@@ -410,14 +533,77 @@ async def process_message(request: MessageRequest) -> MessageResponse:
 ## Phase 4: Firestore Integration
 
 ### Goal
-Seamlessly integrate with existing Firebase infrastructure to fetch conversation data, read message history, and write AI-generated FAQ responses.
+Seamlessly integrate with existing Firebase infrastructure to write AI-generated FAQ responses. Simplified from original plan since answer discovery is handled by Q+A pairing.
+
+### KEY CHANGES FROM ORIGINAL PLAN
+- **REMOVED:** Complex answer discovery logic (get_messages_after, find_answer_message)
+- **ADDED:** Context fetching in Firebase Cloud Function (not Python service)
+- **SIMPLIFIED:** Python only needs to write FAQ messages, not read conversation history
 
 ### Implementation Tasks
 
-#### 1. Extend Firebase Client
+#### 1. Update Firebase Cloud Function (TypeScript)
+File: `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/index.ts`
+
+**CRITICAL CHANGE: Fetch context before calling Python service**
+
+```typescript
+// NEW: Fetch last 5 messages for context-based Q+A detection
+export const onMessageCreated = functions.firestore
+  .document('messages/{messageId}')
+  .onCreate(async (snap, context) => {
+    const message = snap.data();
+
+    // Check if conversation has AI enabled
+    const conversation = await admin.firestore()
+      .collection('conversations')
+      .doc(message.conversationId)
+      .get();
+
+    if (!conversation.data()?.participantIds?.includes('ai-agent')) {
+      return; // Skip if AI not enabled
+    }
+
+    // NEW: Fetch last 5 messages for context
+    const contextSnapshot = await admin.firestore()
+      .collection('messages')
+      .where('conversationId', '==', message.conversationId)
+      .orderBy('timestamp', 'desc')
+      .limit(6) // Get 6 to exclude the new message itself
+      .get();
+
+    const contextMessages = contextSnapshot.docs
+      .filter(doc => doc.id !== snap.id) // Exclude the new message
+      .slice(0, 5) // Take only 5
+      .reverse() // Oldest to newest
+      .map(doc => ({
+        messageId: doc.id,
+        text: doc.data().text || '',
+        senderId: doc.data().senderId,
+        timestamp: doc.data().timestamp
+      }));
+
+    // Call Python service with context
+    const response = await fetch(`${PYTHON_SERVICE_URL}/process-message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messageId: snap.id,
+        conversationId: message.conversationId,
+        senderId: message.senderId,
+        text: message.text,
+        timestamp: message.timestamp,
+        participantIds: message.participantIds,
+        context: contextMessages  // NEW: Context for Q+A detection
+      })
+    });
+  });
+```
+
+#### 2. Extend Firebase Client (Python)
 File: `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/firebase_client.py`
 
-**New Methods to Add:**
+**Simplified Methods (no complex queries needed):**
 
 ```python
 async def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
@@ -425,31 +611,6 @@ async def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any
     Fetch conversation document by ID.
     Returns: Conversation data with participantIds, isGroupChat, aiEnabled, etc.
     Used to check if AI is enabled for this conversation.
-    """
-
-async def get_message(self, message_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Fetch single message by ID.
-    Returns: Message data including text, senderId, metadata, etc.
-    Used to fetch original answer message for FAQ linking.
-    """
-
-async def get_messages_after(
-    self,
-    conversation_id: str,
-    after_timestamp: datetime,
-    limit: int = 5
-) -> List[Dict[str, Any]]:
-    """
-    Fetch messages after a specific timestamp in a conversation.
-    Returns: List of messages ordered by timestamp ascending.
-    Used to find answer that followed a question.
-
-    Query:
-        messages.where("conversationId", "==", conversation_id)
-                .where("timestamp", ">", after_timestamp)
-                .order_by("timestamp", "asc")
-                .limit(limit)
     """
 
 async def message_exists(self, message_id: str) -> bool:
@@ -463,8 +624,9 @@ async def send_faq_message(
     self,
     conversation_id: str,
     participant_ids: List[str],
-    matched_question: str,
-    faq_reference_id: str,
+    answer_text: str,
+    question_message_id: str,
+    answer_message_id: str,
     match_confidence: float
 ) -> str:
     """
@@ -475,16 +637,17 @@ async def send_faq_message(
         conversationId: str,
         senderId: "ai-assistant",  # Must match iOS filter
         participantIds: List[str],
-        text: "💡 This question was asked before! [User] answered it here:",
+        text: "💡 This question was asked before! Here's the answer:",
         timestamp: SERVER_TIMESTAMP,
         status: "sent",
         readBy: {},  # Empty initially
         imageUrl: None,
         metadata: {
             "isAIMessage": "true",  # String type per iOS model
-            "faqReference": faq_reference_id,  # Points to answer message
+            "faqReference": answer_message_id,  # Points to answer message
             "matchConfidence": str(match_confidence),  # e.g., "0.92"
-            "matchedQuestion": matched_question  # Original question text
+            "questionMessageId": question_message_id,  # Original question
+            "answerText": answer_text  # Embedded in metadata for preview
         }
     }
 
@@ -492,62 +655,12 @@ async def send_faq_message(
     """
 ```
 
-#### 2. Conversation AI-Enabled Check
-**Important:** Based on seed data analysis (`/Users/Gauntlet/gauntlet/CreatorLink/emulator-seed/seed.js`), conversations include `ai-agent` in `participantIds`.
+**REMOVED from original plan:**
+- `get_messages_after()` - Not needed, context from Cloud Function
+- `get_message()` - Not needed, metadata contains everything
+- `find_answer_message()` - Not needed, Q+A pairing done in Phase 2
 
-**Detection Strategy:**
-```python
-def is_ai_enabled(conversation: Dict[str, Any]) -> bool:
-    """
-    Check if AI is enabled for this conversation.
-
-    Method 1 (Current): Check if 'ai-agent' in participantIds
-    Method 2 (Future): Add 'aiEnabled' boolean field to conversations collection
-
-    For now, use Method 1 based on existing seed data.
-    """
-    return "ai-agent" in conversation.get("participantIds", [])
-```
-
-#### 3. Answer Message Discovery
-**Challenge:** Find the message that answered the original question.
-
-**Algorithm:**
-```python
-async def find_answer_message(
-    self,
-    conversation_id: str,
-    question_timestamp: datetime
-) -> Optional[Dict[str, Any]]:
-    """
-    Find answer message that followed a question.
-
-    1. Fetch next 2-3 messages after question timestamp
-    2. Filter out:
-        - System messages (senderId == "system")
-        - AI messages (senderId == "ai-assistant")
-        - Very short messages (len < 10 chars)
-    3. Return first valid participant message
-
-    Returns: Answer message dict or None if no valid answer found
-    """
-    messages = await self.get_messages_after(
-        conversation_id=conversation_id,
-        after_timestamp=question_timestamp,
-        limit=3  # Look ahead 3 messages max
-    )
-
-    for msg in messages:
-        sender = msg.get("senderId", "")
-        text = msg.get("text", "")
-
-        if sender not in ["system", "ai-assistant"] and len(text) >= 10:
-            return msg
-
-    return None
-```
-
-#### 4. Response Message Formatting
+#### 3. Response Message Formatting
 **Text Templates:**
 
 High confidence (>= 0.90):
@@ -567,7 +680,7 @@ f"\"{answer_preview}\""
 
 **Preview Length:** Truncate answer to 200 characters with "..." for readability.
 
-#### 5. Update Conversation LastMessage
+#### 4. Update Conversation LastMessage
 **Critical:** AI responses must update conversation to appear in inbox.
 
 Already implemented in `firebase_client.py` line 122-130:
@@ -750,16 +863,18 @@ async def test_faq_accuracy():
 - Collection created with proper schema
 - Health check endpoint shows Qdrant connected
 
-### Week 2: FAQ Detection Logic
+### Week 2: Q+A Detection & FAQ Service
 **Files to Create/Modify:**
-- ✅ Create `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/text_analysis.py`
+- ✅ Create `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/qa_detector.py` - **NEW: GPT-4o-mini based detection**
 - ✅ Create `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/faq_service.py`
 - ✅ Extend `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/firebase_client.py`
-- ✅ Update `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/main.py` (modify `/process-message`)
+- ✅ Update `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/main.py` (add context to MessageRequest)
+- ✅ Update `/Users/Gauntlet/gauntlet/CreatorLink/firebase/functions/src/index.ts` - **CRITICAL: Fetch context**
 
 **Deliverables:**
-- Question detection working (90%+ accuracy)
-- Vector search returning relevant matches
+- Context-based Q+A pairing working with GPT-4o-mini
+- Q+A pair embeddings stored in Qdrant with correct metadata
+- Vector search returning relevant Q+A matches
 - FAQ response messages being created
 - Edge cases handled (loops, deleted messages)
 
@@ -837,9 +952,14 @@ curl http://localhost:6333/healthz
 ## Key Implementation Considerations
 
 ### Cost Optimization
+- **GPT-4o-mini Q+A Detection:** $0.15/$0.60 per 1M tokens (input/output)
+  - Per message: ~200 input + 50 output tokens = $0.00006
+  - 10K messages/day = $0.60/day = $18/month
 - **Embeddings:** text-embedding-3-small @ $0.02/1M tokens
-- **Estimate:** 1,000 messages/day × 50 tokens avg = 50K tokens/day = $0.001/day = $0.36/year
-- **Strategy:** No caching needed at this scale; add Redis if scaling to 100K+ messages/day
+  - Only Q+A pairs (~20% of messages) = 2K pairs/day
+  - 2K × 100 tokens avg = 200K tokens/day = $0.004/day = $1.20/month
+- **Total:** ~$19/month for 10K messages/day
+- **Strategy:** Much cheaper than hiring support staff to answer repeated questions!
 
 ### Scalability
 - **Current:** Single Qdrant instance handles 1M vectors easily
@@ -959,13 +1079,16 @@ curl http://localhost:6333/healthz
 ### New Files to Create
 - `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/vector_store.py`
 - `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/embeddings.py`
-- `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/text_analysis.py`
+- `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/qa_detector.py` - **NEW: Replaces text_analysis.py**
 - `/Users/Gauntlet/gauntlet/CreatorLink/python-service/app/faq_service.py`
 - `/Users/Gauntlet/gauntlet/CreatorLink/python-service/docker-compose.yml`
 - `/Users/Gauntlet/gauntlet/CreatorLink/python-service/scripts/seed_embeddings.py`
 - `/Users/Gauntlet/gauntlet/CreatorLink/python-service/scripts/seed_demo_data.py`
 - `/Users/Gauntlet/gauntlet/CreatorLink/python-service/scripts/test_faq_matching.py`
 - `/Users/Gauntlet/gauntlet/CreatorLink/python-service/tests/test_*.py` (unit tests)
+
+### Files REMOVED from Original Plan
+- ~~`text_analysis.py`~~ - Replaced by GPT-4o-mini based `qa_detector.py`
 
 ### Configuration Files to Update
 - `/Users/Gauntlet/gauntlet/CreatorLink/python-service/requirements.txt` - Add new dependencies
@@ -974,6 +1097,63 @@ curl http://localhost:6333/healthz
 
 ---
 
+## CHANGELOG: October 23, 2025 Update
+
+### What Changed from Original Plan
+
+**MAJOR ARCHITECTURE CHANGE: Context-Based Q+A Detection**
+
+**Original Approach (DEPRECATED):**
+- Detect questions using heuristics (contains "?", starts with question words)
+- Detect answers using heuristics (follows question, length > 10 chars)
+- Store separate embeddings for questions and answers
+- Search questions, then query Firestore to find answer
+
+**Problems:**
+- Brittle heuristics fail on short answers: "$30", "7pm", "yes"
+- False positives: "Really?" detected as question
+- Complex pairing logic prone to errors
+- Extra Firestore queries slow down FAQ responses
+
+**NEW Approach (CURRENT):**
+- Firebase Cloud Function fetches last 5 messages as context
+- GPT-4o-mini analyzes: "Does new message answer any question in context?"
+- If YES: Create SINGLE embedding for Q+A pair: "Question: {q}\nAnswer: {a}"
+- If NO: Skip embedding
+- Store both question and answer in Qdrant metadata
+- FAQ search queries Q+A pairs, answer already available
+
+**Benefits:**
+- ✅ Handles ambiguous answers: "$30" correctly paired with "How much?"
+- ✅ Context-aware: Understands implicit questions ("anyone free?" → "I am!")
+- ✅ Simpler architecture: No complex answer discovery logic
+- ✅ Faster FAQ responses: No Firestore lookup needed
+- ✅ Better accuracy: GPT-4o-mini > regex patterns
+
+**Cost Impact:**
+- Added: $18/month for GPT-4o-mini Q+A detection (10K messages/day)
+- Reduced: Embedding costs (only 20% of messages, not all)
+- **Total: ~$19/month** (well worth it for improved accuracy)
+
+### Files Changed
+
+**Added:**
+- `qa_detector.py` - NEW module using GPT-4o-mini
+
+**Removed:**
+- ~~`text_analysis.py`~~ - Replaced by GPT-4o-mini approach
+
+**Modified:**
+- Phase 2: Added context-based detection workflow
+- Phase 3: Simplified FAQ search (no Firestore lookups)
+- Phase 4: Updated Firebase Cloud Function to fetch context
+- Vector store schema: Added Q+A pair metadata fields
+- Cost estimates: Updated with GPT-4o-mini costs
+
+---
+
 **End of Plan**
 
 *This plan is based on 2025 best practices for vector databases (Qdrant), embedding models (OpenAI text-embedding-3-small), and production FastAPI architectures. All file paths and schemas were verified against the actual codebase at `/Users/Gauntlet/gauntlet/CreatorLink`.*
+
+*Updated October 23, 2025 with context-based Q+A detection approach using GPT-4o-mini.*
