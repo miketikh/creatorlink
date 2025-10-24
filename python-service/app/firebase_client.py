@@ -165,3 +165,51 @@ class FirebaseClient:
         except Exception as e:
             logger.error(f"Failed to update conversation {conversation_id}: {e}")
             raise
+
+    async def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch conversation document by ID.
+
+        Args:
+            conversation_id: ID of the conversation to fetch
+
+        Returns:
+            Conversation data dict with participantIds, isGroupChat, etc., or None if not found
+        """
+        try:
+            conversation_ref = self.db.collection("conversations").document(conversation_id)
+            conversation_doc = conversation_ref.get()
+
+            if not conversation_doc.exists:
+                logger.warning(f"Conversation {conversation_id} not found")
+                return None
+
+            conversation_data = conversation_doc.to_dict()
+            logger.debug(f"Fetched conversation {conversation_id}")
+            return conversation_data
+
+        except Exception as e:
+            logger.error(f"Failed to fetch conversation {conversation_id}: {e}")
+            raise
+
+    def is_ai_enabled(self, conversation: Optional[Dict[str, Any]]) -> bool:
+        """
+        Check if AI is enabled for a conversation.
+
+        Args:
+            conversation: Conversation data dict (from get_conversation)
+
+        Returns:
+            True if AI is enabled (ai-assistant in participantIds or aiEnabled=True)
+        """
+        if not conversation:
+            return False
+
+        # Check if ai-assistant is in participant list
+        participant_ids = conversation.get("participantIds", [])
+        if "ai-assistant" in participant_ids:
+            return True
+
+        # Check aiEnabled flag (if it exists)
+        ai_enabled = conversation.get("aiEnabled", False)
+        return bool(ai_enabled)

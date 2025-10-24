@@ -16,7 +16,9 @@ from qdrant_client.models import (
     PointStruct,
     Filter,
     FieldCondition,
-    MatchValue
+    MatchValue,
+    PayloadSchemaType,
+    CreateCollection
 )
 
 logger = logging.getLogger(__name__)
@@ -82,7 +84,7 @@ class VectorStore:
     async def initialize_collection(self) -> None:
         """
         Initialize the Qdrant collection for message embeddings.
-        Creates collection with proper vector configuration if it doesn't exist.
+        Creates collection with proper vector configuration and payload indexes if it doesn't exist.
 
         Raises:
             Exception: If collection creation fails
@@ -97,6 +99,8 @@ class VectorStore:
 
             if collection_exists:
                 logger.info(f"Collection '{self.collection_name}' already exists")
+                # Create indexes on existing collection (idempotent operation)
+                await self._create_payload_indexes()
                 return
 
             # Create collection with vector configuration
@@ -112,9 +116,46 @@ class VectorStore:
 
             logger.info(f"Collection '{self.collection_name}' created successfully")
 
+            # Create payload indexes for efficient filtering
+            await self._create_payload_indexes()
+
         except Exception as e:
             logger.error(f"Failed to initialize collection '{self.collection_name}': {e}")
             raise
+
+    async def _create_payload_indexes(self) -> None:
+        """
+        Create payload indexes for efficient filtering on Q+A pair fields.
+        Indexes conversation_id, is_pair, and question_message_id for fast lookups.
+        """
+        try:
+            # Index on conversation_id for conversation-scoped searches
+            await self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="conversation_id",
+                field_schema=PayloadSchemaType.KEYWORD
+            )
+            logger.info("Created index on conversation_id")
+
+            # Index on metadata.is_pair for filtering Q+A pairs vs individual messages
+            await self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="metadata.is_pair",
+                field_schema=PayloadSchemaType.BOOL
+            )
+            logger.info("Created index on metadata.is_pair")
+
+            # Index on metadata.question_message_id for linking to original questions
+            await self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="metadata.question_message_id",
+                field_schema=PayloadSchemaType.KEYWORD
+            )
+            logger.info("Created index on metadata.question_message_id")
+
+        except Exception as e:
+            # Indexes may already exist, log but don't fail
+            logger.warning(f"Error creating payload indexes (may already exist): {e}")
 
     async def upsert_message_embedding(
         self,

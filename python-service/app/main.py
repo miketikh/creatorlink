@@ -15,6 +15,8 @@ from pydantic import BaseModel
 from .firebase_client import FirebaseClient
 from .ai_agents import AIAgent
 from .vector_store import VectorStore
+from .embeddings import EmbeddingService
+from .qa_detector import QADetector, ContextMessage as QAContextMessage
 
 # Configure logging
 logging.basicConfig(
@@ -37,10 +39,12 @@ firebase_client = FirebaseClient()
 logger.info("Initializing AI agent...")
 ai_agent = AIAgent()
 
-# Vector store will be initialized in startup event
+# Services that will be initialized in startup event
 vector_store = None
+embedding_service = None
+qa_detector = None
 
-logger.info("Application initialization complete (vector store will initialize on startup)")
+logger.info("Application initialization complete (services will initialize on startup)")
 
 
 # Startup and shutdown event handlers
@@ -48,9 +52,9 @@ logger.info("Application initialization complete (vector store will initialize o
 async def startup_event():
     """
     Initialize services on application startup.
-    Sets up vector store and creates necessary collections.
+    Sets up vector store, embedding service, and Q+A detector.
     """
-    global vector_store
+    global vector_store, embedding_service, qa_detector
 
     try:
         logger.info("Starting application initialization...")
@@ -61,6 +65,14 @@ async def startup_event():
 
         # Create collection if it doesn't exist
         await vector_store.initialize_collection()
+
+        # Initialize embedding service
+        logger.info("Initializing embedding service...")
+        embedding_service = EmbeddingService()
+
+        # Initialize Q+A detector
+        logger.info("Initializing Q+A detector...")
+        qa_detector = QADetector()
 
         logger.info("Application startup complete - all services initialized")
 
@@ -98,8 +110,24 @@ class AIConfig(BaseModel):
     minimumSimilarity: float = 0.85
 
 
+class ContextMessage(BaseModel):
+    """
+    Context message for Q+A detection.
+    Represents a previous message in the conversation.
+    """
+    messageId: str
+    senderId: str
+    text: str
+    timestamp: Dict[str, int]  # Firebase timestamp object with _seconds and _nanoseconds
+
+
 class MessageRequest(BaseModel):
-    """Request model for incoming messages from Cloud Functions."""
+    """
+    Request model for incoming messages from Cloud Functions.
+
+    The context field contains recent messages for Q+A pair detection.
+    Firebase Cloud Function should fetch the last 5 messages and include them here.
+    """
     messageId: str
     conversationId: str
     senderId: str
@@ -107,6 +135,7 @@ class MessageRequest(BaseModel):
     timestamp: Dict[str, int]  # Firebase timestamp object with _seconds and _nanoseconds
     participantIds: List[str]
     aiConfig: Optional[AIConfig] = None
+    context: List[ContextMessage] = []  # Last 5 messages for Q+A detection (backward compatible)
 
 
 class MessageResponse(BaseModel):
@@ -178,10 +207,11 @@ async def health_check() -> Dict[str, Any]:
 async def process_message(request: MessageRequest) -> MessageResponse:
     """
     Process incoming message and generate AI response.
+    Detects Q+A pairs and creates embeddings for FAQ matching.
     Called by Firebase Cloud Function when new messages are created.
 
     Args:
-        request: Message data from Cloud Function
+        request: Message data from Cloud Function including conversation context
 
     Returns:
         Processing result with response message ID
@@ -189,37 +219,174 @@ async def process_message(request: MessageRequest) -> MessageResponse:
     Raises:
         HTTPException: If message processing fails
     """
+    import time as time_module
+    start_time = time_module.time()
+
     try:
         logger.info(f"Received message request: {request.messageId} from {request.senderId}")
         logger.info(f"Message text: '{request.text}'")
-        logger.info(f"AI Config: faqDetection={request.aiConfig.faqDetectionEnabled if request.aiConfig else True}, "
-                    f"similarity={request.aiConfig.minimumSimilarity if request.aiConfig else 0.85}")
+        logger.info(f"Context messages: {len(request.context)}")
 
-        # Process message with AI agent
+        # Skip Q+A detection if sender is AI assistant (prevent loops)
+        if request.senderId == "ai-assistant":
+            logger.info("Skipping Q+A detection - message from AI assistant")
+            return MessageResponse(
+                success=True,
+                message="Skipped AI-generated message",
+                responseMessageId=None
+            )
+
+        # Check if AI is enabled for this conversation
+        conversation = await firebase_client.get_conversation(request.conversationId)
+        ai_enabled = firebase_client.is_ai_enabled(conversation)
+
+        if not ai_enabled:
+            logger.info("Skipping Q+A detection - AI not enabled for this conversation")
+            return MessageResponse(
+                success=True,
+                message="Skipped - AI not enabled",
+                responseMessageId=None
+            )
+
+        # Q+A Detection Pipeline
+        qa_pair = None
+        detection_time = 0.0
+        embedding_time = 0.0
+        storage_time = 0.0
+
+        if request.context and qa_detector and embedding_service and vector_store:
+            # Step 1: Detect Q+A pair using GPT-4o-mini
+            detection_start = time_module.time()
+            try:
+                # Convert Pydantic ContextMessage to QADetector ContextMessage
+                context_messages = [
+                    QAContextMessage(
+                        messageId=msg.messageId,
+                        senderId=msg.senderId,
+                        text=msg.text,
+                        timestamp=msg.timestamp
+                    )
+                    for msg in request.context
+                ]
+
+                # Create current message as ContextMessage
+                current_message = QAContextMessage(
+                    messageId=request.messageId,
+                    senderId=request.senderId,
+                    text=request.text,
+                    timestamp=request.timestamp
+                )
+
+                # Detect Q+A pair
+                qa_pair = await qa_detector.detect_qa_pair(current_message, context_messages)
+                detection_time = time_module.time() - detection_start
+
+                logger.info(f"Q+A detection completed in {detection_time:.3f}s")
+
+            except Exception as e:
+                logger.error(f"Q+A detection failed: {e}", exc_info=True)
+                # Continue without Q+A embedding if detection fails
+
+            # Step 2: If Q+A pair detected, create embedding and store
+            if qa_pair:
+                logger.info(
+                    f"Q+A pair detected (confidence={qa_pair.confidence:.2f}): "
+                    f"Q='{qa_pair.question_text[:50]}...' A='{qa_pair.answer_text[:50]}...'"
+                )
+
+                try:
+                    # Step 2a: Generate embedding for Q+A pair
+                    embedding_start = time_module.time()
+
+                    # Format combined text: "Question: {q}\nAnswer: {a}"
+                    combined_text = f"Question: {qa_pair.question_text}\nAnswer: {qa_pair.answer_text}"
+
+                    # Generate embedding
+                    embedding_vector = await embedding_service.generate_embedding(combined_text)
+                    embedding_time = time_module.time() - embedding_start
+
+                    logger.info(f"Embedding generated in {embedding_time:.3f}s")
+
+                    # Step 2b: Store in vector database
+                    storage_start = time_module.time()
+
+                    # Prepare metadata for Q+A pair
+                    qa_metadata = {
+                        "is_pair": True,
+                        "question_message_id": qa_pair.question_message_id,
+                        "question_text": qa_pair.question_text,
+                        "question_sender_id": qa_pair.question_sender_id,
+                        "answer_message_id": qa_pair.answer_message_id,
+                        "answer_text": qa_pair.answer_text,
+                        "answer_sender_id": qa_pair.answer_sender_id,
+                        "confidence": qa_pair.confidence,
+                        "reasoning": qa_pair.reasoning or ""
+                    }
+
+                    # Upsert to vector store
+                    await vector_store.upsert_message_embedding(
+                        message_id=qa_pair.answer_message_id,  # Use answer message ID as primary
+                        conversation_id=request.conversationId,
+                        embedding=embedding_vector,
+                        message_text=combined_text,
+                        sender_id=qa_pair.answer_sender_id,
+                        timestamp=datetime.now(),
+                        metadata=qa_metadata
+                    )
+
+                    storage_time = time_module.time() - storage_start
+                    logger.info(f"Q+A pair stored in vector database in {storage_time:.3f}s")
+
+                except Exception as e:
+                    logger.error(f"Failed to embed/store Q+A pair: {e}", exc_info=True)
+                    # Continue even if embedding/storage fails
+            else:
+                logger.info("No Q+A pair detected - skipping embedding")
+
+        else:
+            logger.debug("Q+A detection skipped - no context or services not initialized")
+
+        # Calculate total time and log performance metrics
+        total_time = time_module.time() - start_time
+        logger.info(
+            f"Message processing complete in {total_time:.3f}s "
+            f"(detection={detection_time:.3f}s, embedding={embedding_time:.3f}s, "
+            f"storage={storage_time:.3f}s)"
+        )
+
+        # Log cost metrics if Q+A pair was detected
+        if qa_pair:
+            # Estimate GPT-4o-mini cost for detection
+            detection_cost_info = qa_detector.estimate_cost_per_detection(len(request.context))
+
+            # Estimate embedding cost
+            embedding_cost_info = embedding_service.estimate_cost([
+                f"Question: {qa_pair.question_text}\nAnswer: {qa_pair.answer_text}"
+            ])
+
+            total_cost = detection_cost_info["cost_usd"] + embedding_cost_info["cost_usd"]
+
+            logger.info(
+                f"Cost metrics: detection=${detection_cost_info['cost_usd']:.6f}, "
+                f"embedding=${embedding_cost_info['cost_usd']:.6f}, "
+                f"total=${total_cost:.6f}"
+            )
+
+        # For now, still send echo response (FAQ search will be implemented in Phase 3)
         ai_response_text = await ai_agent.process(request.text)
 
         # Create metadata for AI-generated message
-        # Note: All values must be strings to match iOS Message model [String: String]
         response_metadata = {
-            "ai_generated": "true",  # Keep for backward compatibility
+            "ai_generated": "true",
             "original_message_id": request.messageId,
-            "agent_type": "faq_detector",  # Changed from "echo"
-            "agent_version": "0.2.0",  # Bumped version
+            "agent_type": "faq_detector",
+            "agent_version": "0.3.0",
         }
-
-        # TODO Phase 5: Implement FAQ detection
-        # 1. Fetch recent messages from conversation
-        # 2. Use embedding/similarity search to find matches
-        # 3. If match found above minimumSimilarity threshold:
-        #    - Add faqReference to metadata
-        #    - Add matchConfidence to metadata
-        #    - Add matchedQuestion to metadata
-        #    - Format response text to reference original answer
 
         # Send AI response back to Firestore
         response_message_id = await firebase_client.send_message(
             conversation_id=request.conversationId,
-            sender_id="ai-assistant",  # Changed from "ai-agent"
+            sender_id="ai-assistant",
             text=ai_response_text,
             participant_ids=request.participantIds,
             metadata=response_metadata
@@ -229,7 +396,7 @@ async def process_message(request: MessageRequest) -> MessageResponse:
 
         return MessageResponse(
             success=True,
-            message="Message processed and AI response created",
+            message="Message processed and Q+A pair embedded" if qa_pair else "Message processed",
             responseMessageId=response_message_id
         )
 
