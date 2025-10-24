@@ -5,6 +5,14 @@
 
 export {getOpenAIClient} from "./client";
 export {detectIfQuestion} from "./lib/question-detector";
-export type {QuestionDetectionResult, AIOperationResult} from "./types";
+export {fetchConversationMessages} from "./lib/message-fetcher";
+export {findFAQMatch} from "./lib/faq-matcher";
+export {writeAIResponse} from "./lib/response-writer";
 
-// Future exports will be added here as we expand functionality
+export type {
+  QuestionDetectionResult,
+  AIOperationResult,
+} from "./types";
+export type {ConversationMessage} from "./lib/message-fetcher";
+export type {FAQMatch} from "./lib/faq-matcher";
+export type {WriteResponseResult} from "./lib/response-writer";

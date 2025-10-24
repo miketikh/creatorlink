@@ -4,9 +4,9 @@
   "description": "Seed script for CreatorLink Firebase emulators",
   "main": "seed.js",
   "scripts": {
-    "seed": "node seed.js",
     "seed:generic": "node seed.js --type=generic",
-    "seed:ai-group": "node seed.js --type=ai-group"
+    "seed:ai-group": "node seed.js --type=ai-group",
+    "seed:ai-group-test": "node seed.js --type=ai-group-test"
   },
   "dependencies": {
     "firebase-admin": "^12.0.0",

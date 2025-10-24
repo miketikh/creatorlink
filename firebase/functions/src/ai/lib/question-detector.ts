@@ -32,6 +32,7 @@ Consider as questions:
 - Indirect questions (wondering about, curious if, anyone know)
 - Requests for information or help
 - Questions with question marks
+- Also ignore questions like "how are you / how is everyone?", "what's up?", "how's it going?", "how's everyone doing?". We want to detect questions that need a response.
 
 Do NOT consider as questions:
 - Greetings (hi, hello, hey)

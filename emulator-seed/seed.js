@@ -29,12 +29,14 @@ const db = admin.firestore();
 
 // Import seed files
 const seedGeneric = require('./seed-files/generic');
-const seedAIGroup = require('./seed-files/ai-group');
+const seedAIGroup = require('./seed-files/ai-group-nofunction');
+const seedAIGroupTest = require('./seed-files/ai-group-test');
 
 // Map of seed types to seed functions
 const SEED_TYPES = {
   'generic': seedGeneric,
-  'ai-group': seedAIGroup
+  'ai-group': seedAIGroup,
+  'ai-group-test': seedAIGroupTest
 };
 
 // Parse command line arguments
