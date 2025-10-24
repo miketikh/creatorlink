@@ -15,15 +15,88 @@ class ConversationsViewModel {
     var conversations: [Conversation] = []
     var isLoading = false
     var errorMessage: String?
+    var tagErrorMessage: String?
+
+    // Filter state properties
+    var selectedCategoryFilters: [ConversationTag] = []
+    var selectedStatusFilters: [StatusTag] = []
+    var showResolvedConversations: Bool = true
 
     private let conversationService = ConversationService.shared
     private let userService = UserService.shared
+    private let filterPreferencesService = FilterPreferencesService.shared
+    private let taggingService = TaggingService.shared
     private var conversationsListener: ListenerRegistration?
     var currentUserId: String?
+
+    // MARK: - Computed Properties
+
+    /// Returns filtered conversations based on selected filters
+    var filteredConversations: [Conversation] {
+        guard let userId = currentUserId else {
+            return conversations
+        }
+
+        var filtered = conversations
+
+        // Filter by category tags (OR logic - show if ANY tag matches)
+        if !selectedCategoryFilters.isEmpty {
+            filtered = filtered.filter { conversation in
+                let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+                return selectedCategoryFilters.contains { categoryFilter in
+                    userTags.categories.contains(categoryFilter)
+                }
+            }
+        }
+
+        // Filter by status tags (OR logic - show if ANY tag matches)
+        if !selectedStatusFilters.isEmpty {
+            filtered = filtered.filter { conversation in
+                let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+                return selectedStatusFilters.contains { statusFilter in
+                    userTags.statuses.contains(statusFilter)
+                }
+            }
+        }
+
+        // Filter by resolved status
+        if !showResolvedConversations {
+            filtered = filtered.filter { conversation in
+                let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+                return !userTags.statuses.contains(.resolved)
+            }
+        }
+
+        return filtered
+    }
 
     // MARK: - Initialization
 
     init() {
+        // Load saved filter preferences
+        loadFilterPreferences()
+    }
+
+    /// Loads saved filter preferences from UserDefaults
+    private func loadFilterPreferences() {
+        let savedFilters = filterPreferencesService.loadFilters()
+
+        // Convert raw string values back to enums
+        selectedCategoryFilters = savedFilters.categoryFilters.compactMap { ConversationTag(rawValue: $0) }
+        selectedStatusFilters = savedFilters.statusFilters.compactMap { StatusTag(rawValue: $0) }
+        showResolvedConversations = savedFilters.showResolved
+    }
+
+    /// Saves current filter preferences to UserDefaults
+    private func saveFilterPreferences() {
+        let categoryRawValues = selectedCategoryFilters.map { $0.rawValue }
+        let statusRawValues = selectedStatusFilters.map { $0.rawValue }
+
+        filterPreferencesService.saveFilters(
+            categoryFilters: categoryRawValues,
+            statusFilters: statusRawValues,
+            showResolved: showResolvedConversations
+        )
     }
 
     // MARK: - Public Methods
@@ -175,5 +248,198 @@ class ConversationsViewModel {
     func cleanup() {
         conversationsListener?.remove()
         conversationsListener = nil
+    }
+
+    // MARK: - Filter Management
+
+    /// Toggles a category filter (add if not present, remove if present)
+    func toggleCategoryFilter(_ tag: ConversationTag) {
+        if selectedCategoryFilters.contains(tag) {
+            selectedCategoryFilters.removeAll { $0 == tag }
+        } else {
+            selectedCategoryFilters.append(tag)
+        }
+        saveFilterPreferences()
+    }
+
+    /// Toggles a status filter (add if not present, remove if present)
+    func toggleStatusFilter(_ tag: StatusTag) {
+        if selectedStatusFilters.contains(tag) {
+            selectedStatusFilters.removeAll { $0 == tag }
+        } else {
+            selectedStatusFilters.append(tag)
+        }
+        saveFilterPreferences()
+    }
+
+    /// Clears all active filters
+    func clearAllFilters() {
+        selectedCategoryFilters = []
+        selectedStatusFilters = []
+        showResolvedConversations = true
+        saveFilterPreferences()
+    }
+
+    // MARK: - Tag Update Convenience Methods
+
+    /// Updates category tags for a conversation (user action wrapper)
+    func updateConversationCategory(conversationId: String, tags: [ConversationTag]) async {
+        guard let userId = currentUserId else {
+            setTagError("No user logged in")
+            return
+        }
+
+        do {
+            try await taggingService.updateCategoryTags(conversationId: conversationId, userId: userId, tags: tags)
+        } catch {
+            setTagError(error.localizedDescription)
+        }
+    }
+
+    /// Updates status tags for a conversation (user action wrapper)
+    func updateConversationStatus(conversationId: String, tags: [StatusTag]) async {
+        guard let userId = currentUserId else {
+            setTagError("No user logged in")
+            return
+        }
+
+        do {
+            try await taggingService.updateStatusTags(conversationId: conversationId, userId: userId, tags: tags)
+        } catch {
+            setTagError(error.localizedDescription)
+        }
+    }
+
+    /// Marks a conversation as urgent (quick action wrapper)
+    func markConversationAsUrgent(conversationId: String) async {
+        guard let userId = currentUserId else {
+            setTagError("No user logged in")
+            return
+        }
+
+        do {
+            try await taggingService.markAsUrgent(conversationId: conversationId, userId: userId)
+        } catch {
+            setTagError(error.localizedDescription)
+        }
+    }
+
+    /// Marks a conversation as resolved (quick action wrapper)
+    func markConversationAsResolved(conversationId: String) async {
+        guard let userId = currentUserId else {
+            setTagError("No user logged in")
+            return
+        }
+
+        do {
+            try await taggingService.markAsResolved(conversationId: conversationId, userId: userId)
+        } catch {
+            setTagError(error.localizedDescription)
+        }
+    }
+
+    /// Sets tag error message and clears it after 3 seconds
+    private func setTagError(_ message: String) {
+        tagErrorMessage = message
+
+        // Clear error after 3 seconds
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+            tagErrorMessage = nil
+        }
+    }
+
+    // MARK: - Tag Query Helpers
+
+    /// Gets all conversations with a specific category tag
+    func getConversationsWithCategory(_ category: ConversationTag) -> [Conversation] {
+        guard let userId = currentUserId else {
+            return []
+        }
+
+        return conversations.filter { conversation in
+            let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+            return userTags.categories.contains(category)
+        }
+    }
+
+    /// Gets all conversations with a specific status tag
+    func getConversationsWithStatus(_ status: StatusTag) -> [Conversation] {
+        guard let userId = currentUserId else {
+            return []
+        }
+
+        return conversations.filter { conversation in
+            let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+            return userTags.statuses.contains(status)
+        }
+    }
+
+    /// Gets all urgent conversations
+    func getUrgentConversations() -> [Conversation] {
+        return getConversationsWithStatus(.urgent)
+    }
+
+    /// Gets all unresolved conversations (without Resolved status)
+    func getUnresolvedConversations() -> [Conversation] {
+        guard let userId = currentUserId else {
+            return []
+        }
+
+        return conversations.filter { conversation in
+            let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+            return !userTags.statuses.contains(.resolved)
+        }
+    }
+
+    /// Counts conversations matching specific tag criteria
+    func countConversationsWithTag(category: ConversationTag? = nil, status: StatusTag? = nil) -> Int {
+        guard let userId = currentUserId else {
+            return 0
+        }
+
+        return conversations.filter { conversation in
+            let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+
+            var matches = true
+            if let category = category {
+                matches = matches && userTags.categories.contains(category)
+            }
+            if let status = status {
+                matches = matches && userTags.statuses.contains(status)
+            }
+
+            return matches
+        }.count
+    }
+
+    /// Computed property for urgent conversation count
+    var urgentCount: Int {
+        getUrgentConversations().count
+    }
+
+    /// Computed property for needs response count
+    var needsResponseCount: Int {
+        getConversationsWithStatus(.needsResponse).count
+    }
+
+    // MARK: - Tag Helpers
+
+    /// Extracts user-specific tags from tagsByUser map
+    /// - Parameters:
+    ///   - conversation: The conversation to extract tags from
+    ///   - userId: The user ID to get tags for
+    /// - Returns: Tuple of category and status tags for the user
+    func getTagsForUser(conversation: Conversation, userId: String) -> (categories: [ConversationTag], statuses: [StatusTag]) {
+        guard let tagsByUser = conversation.tagsByUser,
+              let userTagData = tagsByUser[userId] else {
+            // If no user-specific tags, fall back to conversation-level category tags
+            return (categories: conversation.categoryTags ?? [], statuses: [])
+        }
+
+        let categories = userTagData.categoryTags ?? conversation.categoryTags ?? []
+        let statuses = userTagData.statusTags ?? []
+
+        return (categories: categories, statuses: statuses)
     }
 }

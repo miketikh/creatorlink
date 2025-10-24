@@ -121,6 +121,10 @@ This document provides comprehensive documentation for all Firebase data structu
 - `mutedBy: [String]?` - *Optional* array of user IDs who have muted this conversation
 - `aiEnabled: Bool?` - *Optional* whether AI assistant is enabled for this conversation (nil for existing conversations without AI)
 - `aiConfig: AIConfig?` - *Optional* AI configuration settings (only present when aiEnabled is true)
+- `categoryTags: [ConversationTag]?` - *Optional* array of category tags (business, collaboration, social, fan)
+- `primaryCategory: ConversationTag?` - *Optional* denormalized primary category for efficient filtering
+- `tagMetadata: TagMetadata?` - *Optional* AI confidence and override tracking for tag suggestions
+- `tagsByUser: [String: UserTagData]?` - *Optional* per-user tag data including category and status tags (userId → UserTagData object)
 
 #### AIConfig Struct
 
@@ -135,6 +139,39 @@ This document provides comprehensive documentation for all Firebase data structu
 - Only present when `aiEnabled` is true
 - Default values make it easy to enable AI with sensible defaults
 - minimumSimilarity of 0.85 represents 85% similarity threshold for FAQ matching
+
+#### TagMetadata Struct
+
+**Purpose:** Tracks AI-suggested tags and user override flags for smart categorization.
+
+**Fields:**
+- `aiSuggestedCategory: ConversationTag?` - *Optional* AI's suggested primary category
+- `aiConfidenceScore: Double?` - *Optional* confidence score for AI suggestion (0.0-1.0)
+- `userOverrideCategory: Bool` - Flag indicating if user manually set category (default: false)
+- `userOverrideStatus: Bool` - Flag indicating if user manually set status (default: false)
+- `lastAIAnalysisTime: Date?` - *Optional* timestamp of last AI analysis
+
+**Notes:**
+- TagMetadata is a nested struct within Conversation
+- Only present when tags are being managed (nil for conversations without tags)
+- Override flags help AI learn from user corrections
+- Confidence score indicates how certain AI is about category suggestion
+- All fields except override flags are optional
+
+#### UserTagData Struct
+
+**Purpose:** Stores per-user tag data for category and status tags in conversations.
+
+**Fields:**
+- `categoryTags: [ConversationTag]?` - *Optional* per-user category tags (overrides conversation-level categoryTags for this user)
+- `statusTags: [StatusTag]?` - *Optional* per-user status tags (no conversation-level default exists)
+
+**Notes:**
+- UserTagData is a nested struct within Conversation
+- Enables different users to have different tag perspectives on the same conversation
+- Category tags can be overridden per-user but default to conversation-level tags if not specified
+- Status tags are always per-user (no conversation-level statusTags field exists)
+- Only present in tagsByUser map when user has set custom tags
 
 #### Relationships
 
@@ -167,6 +204,32 @@ This document provides comprehensive documentation for all Firebase data structu
   "aiConfig": {
     "faqDetectionEnabled": true,
     "minimumSimilarity": 0.85
+  },
+  "categoryTags": ["collaboration"],
+  "primaryCategory": "collaboration",
+  "tagMetadata": {
+    "aiSuggestedCategory": "collaboration",
+    "aiConfidenceScore": 0.92,
+    "userOverrideCategory": false,
+    "userOverrideStatus": true,
+    "lastAIAnalysisTime": {
+      "_seconds": 1729699100,
+      "_nanoseconds": 0
+    }
+  },
+  "tagsByUser": {
+    "user123": {
+      "categoryTags": ["collaboration"],
+      "statusTags": ["awaitingReply"]
+    },
+    "user456": {
+      "categoryTags": ["collaboration"],
+      "statusTags": ["needsResponse", "urgent"]
+    },
+    "user789": {
+      "categoryTags": ["business"],
+      "statusTags": []
+    }
   }
 }
 ```
@@ -207,6 +270,13 @@ This document provides comprehensive documentation for all Firebase data structu
 - `aiEnabled` and `aiConfig` are optional for backward compatibility - existing conversations without AI work without migration
 - When AI is enabled, "ai-assistant" user ID is added to `participantIds`
 - AIConfig should only exist when aiEnabled is true (enforced in UI layer)
+- **Tag Fields (all optional for backward compatibility):**
+  - `categoryTags`, `statusTags`, `primaryCategory`, `tagMetadata`, and `tagsByUser` are all optional
+  - Existing conversations without tags continue to work without migration
+  - `tagsByUser` enables per-user tag preferences in group chats (different users can categorize the same conversation differently)
+  - `primaryCategory` is denormalized for efficient Firestore `.whereField` filtering
+  - Tag raw values are stored as strings (e.g., "business", "urgent") for Firestore compatibility
+  - `tagsByUser` map structure: `{ "userId": ["tag1", "tag2"], ... }`
 
 ---
 
@@ -469,6 +539,84 @@ When `metadata` is present on AI-generated messages, it may contain the followin
 - `delivered` status is defined but not currently implemented
 - Status transitions: `sending` → `sent` → `read`
 - Batch read operations update multiple messages to `read` status
+
+---
+
+### Enum: `ConversationTag`
+
+**Swift Model:** `ConversationTag` (ConversationTag.swift)
+
+**Purpose:** Represents conversation category tags for organizing conversations.
+
+#### Values
+
+- `business` - Business-related conversations
+- `collaboration` - Collaboration and project work
+- `social` - Social and casual conversations
+- `fan` - Fan interactions and community
+
+#### Raw Value Type
+
+`String` (Codable, Hashable)
+
+#### Computed Properties
+
+- `emoji: String` - Emoji representation (💼, 🤝, 💬, ⭐)
+- `displayName: String` - User-facing display name
+
+#### Example Usage in Firestore
+
+```json
+{
+  "categoryTags": ["business", "collaboration"],
+  "primaryCategory": "business"
+}
+```
+
+#### Notes
+
+- Stored as raw string values in Firestore
+- Maximum of 2 category tags recommended per conversation
+- Used in `categoryTags`, `primaryCategory`, and `tagMetadata.aiSuggestedCategory` fields
+
+---
+
+### Enum: `StatusTag`
+
+**Swift Model:** `StatusTag` (StatusTag.swift)
+
+**Purpose:** Represents conversation status tags for tracking message states.
+
+#### Values
+
+- `urgent` - Urgent messages requiring immediate attention
+- `needsResponse` - Awaiting user response
+- `awaitingReply` - Awaiting reply from others
+- `resolved` - Conversation resolved
+
+#### Raw Value Type
+
+`String` (Codable, Hashable)
+
+#### Computed Properties
+
+- `emoji: String` - Emoji representation (🔥, ❓, ⏰, ✅)
+- `displayName: String` - User-facing display name
+
+#### Example Usage in Firestore
+
+```json
+{
+  "statusTags": ["urgent", "needsResponse"]
+}
+```
+
+#### Notes
+
+- Stored as raw string values in Firestore
+- `resolved` is mutually exclusive with `urgent` and `needsResponse`
+- If `urgent` is present, `needsResponse` should also be present (business rule)
+- Used in `statusTags` field only
 
 ---
 

@@ -20,7 +20,8 @@ const {
   createUserProfiles,
   createAIUserProfile,
   createConversation,
-  createMessages
+  createMessages,
+  generateTagsByUser
 } = require('../utils');
 
 async function seedGeneric(auth, db) {
@@ -44,20 +45,24 @@ async function seedGeneric(auth, db) {
 
   // Alice's conversations
   const aliceBobConv = await createConversation(db, [alice, bob], false, null, null, 50);
+  aliceBobConv.categoryTag = 'business'; // Business conversation
   conversations.push(aliceBobConv);
-  console.log('  ✓ Alice ↔ Bob (50 messages)');
+  console.log('  ✓ Alice ↔ Bob (50 messages) - Business');
 
   const aliceCarolConv = await createConversation(db, [alice, carol], false, null, null, 1);
+  aliceCarolConv.categoryTag = 'social'; // Social conversation
   conversations.push(aliceCarolConv);
-  console.log('  ✓ Alice ↔ Carol (1 message)');
+  console.log('  ✓ Alice ↔ Carol (1 message) - Social');
 
   const aliceDavidConv = await createConversation(db, [alice, david], false, null, null, 1);
+  aliceDavidConv.categoryTag = 'fan'; // Fan conversation
   conversations.push(aliceDavidConv);
-  console.log('  ✓ Alice ↔ David (1 message)');
+  console.log('  ✓ Alice ↔ David (1 message) - Fan');
 
   const aliceEmmaConv = await createConversation(db, [alice, emma], false, null, null, 50);
+  aliceEmmaConv.categoryTag = 'collaboration'; // Collaboration conversation
   conversations.push(aliceEmmaConv);
-  console.log('  ✓ Alice ↔ Emma (50 messages)');
+  console.log('  ✓ Alice ↔ Emma (50 messages) - Collaboration');
 
   // Group 1: Study Group with AI enabled
   const studyGroupConv = await createConversation(
@@ -99,16 +104,19 @@ async function seedGeneric(auth, db) {
 
   // Bob's additional conversations
   const bobHenryConv = await createConversation(db, [bob, henry], false, null, null, 1);
+  bobHenryConv.categoryTag = 'social'; // Social conversation
   conversations.push(bobHenryConv);
-  console.log('  ✓ Bob ↔ Henry (1 message)');
+  console.log('  ✓ Bob ↔ Henry (1 message) - Social');
 
   const bobIrisConv = await createConversation(db, [bob, iris], false, null, null, 1);
+  bobIrisConv.categoryTag = 'business'; // Business conversation
   conversations.push(bobIrisConv);
-  console.log('  ✓ Bob ↔ Iris (1 message)');
+  console.log('  ✓ Bob ↔ Iris (1 message) - Business');
 
   const bobJackConv = await createConversation(db, [bob, jack], false, null, null, 50);
+  bobJackConv.categoryTag = 'fan'; // Fan conversation
   conversations.push(bobJackConv);
-  console.log('  ✓ Bob ↔ Jack (50 messages)');
+  console.log('  ✓ Bob ↔ Jack (50 messages) - Fan');
 
   // Group 4: Gaming Squad with AI enabled
   const gamingSquadConv = await createConversation(
@@ -131,18 +139,58 @@ async function seedGeneric(auth, db) {
   for (const conv of conversations) {
     const lastMessage = await createMessages(db, conv.id, conv.participantIds, conv.messageCount);
 
-    // Update conversation with actual last message
-    await db.collection('conversations').doc(conv.id).update({
+    // Prepare update data
+    const updateData = {
       lastMessage: lastMessage.text,
       lastMessageTime: lastMessage.timestamp,
       lastMessageSenderId: lastMessage.senderId,
       lastMessageStatus: lastMessage.status
-    });
+    };
+
+    // Add tags for 1:1 conversations only (not group chats)
+    if (!conv.isGroup && conv.categoryTag) {
+      updateData.tagsByUser = generateTagsByUser(
+        conv.participantIds,
+        conv.categoryTag,
+        lastMessage.senderId
+      );
+      updateData.primaryCategory = conv.categoryTag;
+      updateData.categoryTags = [conv.categoryTag];
+    }
+
+    // Update conversation with actual last message and tags
+    await db.collection('conversations').doc(conv.id).update(updateData);
 
     console.log(`  ✓ Created ${conv.messageCount} messages for ${conv.name}`);
   }
 
   console.log(`\n✅ All messages created\n`);
+
+  // Step 5: Add "urgent" status to Alice-Bob conversation for high priority testing
+  console.log('🔥 Adding high priority status to Alice ↔ Bob conversation...');
+
+  const aliceBobDoc = await db.collection('conversations').doc(aliceBobConv.id).get();
+  const aliceBobData = aliceBobDoc.data();
+  const lastSenderId = aliceBobData.lastMessageSenderId;
+
+  // Add "urgent" status to whoever needs to respond
+  const updatedTagsByUser = { ...aliceBobData.tagsByUser };
+
+  if (lastSenderId === alice) {
+    // Bob needs to respond - make it urgent for him
+    updatedTagsByUser[bob].statusTags = ['needsResponse', 'urgent'];
+    console.log('  ✓ Alice sent last message → Bob has urgent response needed');
+  } else {
+    // Alice needs to respond - make it urgent for her
+    updatedTagsByUser[alice].statusTags = ['needsResponse', 'urgent'];
+    console.log('  ✓ Bob sent last message → Alice has urgent response needed');
+  }
+
+  await db.collection('conversations').doc(aliceBobConv.id).update({
+    tagsByUser: updatedTagsByUser
+  });
+
+  console.log('  ✓ High priority status added\n');
   console.log('🎉 Generic seed complete!\n');
 }
 

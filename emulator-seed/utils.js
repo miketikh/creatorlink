@@ -307,6 +307,41 @@ async function createMessages(db, conversationId, participantIds, count) {
   return lastMessageData;
 }
 
+/**
+ * Generate per-user tag data for a conversation
+ * @param {string[]} participantIds - Array of participant user IDs
+ * @param {string|null} categoryTag - Category tag for all users (business, collaboration, social, fan)
+ * @param {string} lastMessageSenderId - ID of user who sent the last message
+ * @returns {Object} tagsByUser map with per-user tag data
+ */
+function generateTagsByUser(participantIds, categoryTag, lastMessageSenderId) {
+  const tagsByUser = {};
+
+  participantIds.forEach(userId => {
+    const userTags = {};
+
+    // Add category tag if provided
+    if (categoryTag) {
+      userTags.categoryTags = [categoryTag];
+    }
+
+    // Add status tags based on who sent the last message
+    if (lastMessageSenderId) {
+      if (userId === lastMessageSenderId) {
+        // Sender is awaiting reply from others
+        userTags.statusTags = ['awaitingReply'];
+      } else {
+        // Recipients need to respond
+        userTags.statusTags = ['needsResponse'];
+      }
+    }
+
+    tagsByUser[userId] = userTags;
+  });
+
+  return tagsByUser;
+}
+
 module.exports = {
   generateAvatarURL,
   getTimestamp,
@@ -316,5 +351,6 @@ module.exports = {
   createUserProfiles,
   createAIUserProfile,
   createConversation,
-  createMessages
+  createMessages,
+  generateTagsByUser
 };

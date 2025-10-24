@@ -54,6 +54,11 @@ struct ConversationRowView: View {
                     .foregroundColor(.primary)
                     .fontWeight(unreadCount > 0 ? .bold : .semibold)
 
+                // Tag badges (if any tags exist for current user)
+                if let currentUserId = viewModel.currentUserId, hasAnyTags {
+                    ConversationTagsView(conversation: conversation, userId: currentUserId)
+                }
+
                 // Show typing indicator or last message
                 if isOtherUserTyping {
                     Text(typingIndicatorText.isEmpty ? "typing..." : typingIndicatorText)
@@ -105,6 +110,15 @@ struct ConversationRowView: View {
             }
         }
         .padding(.vertical, 8)
+        .background(isUrgent ? Color.red.opacity(0.03) : Color.clear)
+        .overlay(alignment: .leading) {
+            // Left border for urgent conversations
+            if isUrgent {
+                Rectangle()
+                    .fill(Color.red.opacity(0.4))
+                    .frame(width: 3)
+            }
+        }
         .task {
             await loadOtherUser()
             await loadUnreadCount()
@@ -231,6 +245,18 @@ struct ConversationRowView: View {
             // For one-on-one chats, just show the message
             return conversation.lastMessage
         }
+    }
+
+    private var hasAnyTags: Bool {
+        guard let userId = viewModel.currentUserId else { return false }
+        let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
+        return !tags.categories.isEmpty || !tags.statuses.isEmpty
+    }
+
+    private var isUrgent: Bool {
+        guard let userId = viewModel.currentUserId else { return false }
+        let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
+        return tags.statuses.contains(.urgent)
     }
 
     // MARK: - Methods
