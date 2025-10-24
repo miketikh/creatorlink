@@ -25,6 +25,7 @@ struct GroupInfoView: View {
     @State private var showAddParticipants = false
     @State private var participantToRemove: UserProfile?
     @State private var showRemoveConfirmation = false
+    @State private var aiEnabled = false
 
     init(conversation: Conversation, userLeftGroup: Binding<Bool>, onDismiss: @escaping () -> Void) {
         self.initialConversation = conversation
@@ -45,6 +46,9 @@ struct GroupInfoView: View {
 
                 // Group Image Section
                 groupImageSection
+
+                // AI Assistant Section
+                aiAssistantSection
 
                 // Participants Section
                 participantsSection
@@ -79,6 +83,9 @@ struct GroupInfoView: View {
         .task {
             await viewModel.loadParticipants()
             setupConversationListener()
+
+            // Initialize AI enabled state from conversation
+            aiEnabled = conversation.aiEnabled ?? false
 
             // Track analytics
             AnalyticsService.shared.trackGroupInfoViewed(groupSize: conversation.participantIds.count)
@@ -284,9 +291,76 @@ struct GroupInfoView: View {
         }
     }
 
+    private var aiAssistantSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("AI ASSISTANT")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fontWeight(.semibold)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: Binding(
+                    get: { aiEnabled },
+                    set: { newValue in
+                        Task {
+                            await toggleAI(enabled: newValue)
+                        }
+                    }
+                )) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "sparkles")
+                            .foregroundColor(.purple)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Enable AI Assistant")
+                                .font(.body)
+                            if aiEnabled {
+                                Text("AI will help answer frequently asked questions")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color(.systemGray4), lineWidth: 0.5)
+                )
+
+                if aiEnabled, let config = conversation.aiConfig {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("FAQ Detection:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(config.faqDetectionEnabled ? "Enabled" : "Disabled")
+                                .font(.caption)
+                                .foregroundColor(config.faqDetectionEnabled ? .green : .secondary)
+                        }
+
+                        HStack {
+                            Text("Similarity Threshold:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text("\(Int(config.minimumSimilarity * 100))%")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                }
+            }
+        }
+    }
+
     private var participantsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("\(viewModel.participants.count) MEMBERS")
+            let humanParticipantCount = viewModel.participants.filter { $0.id != AIConstants.AI_USER_ID }.count
+            let hasAI = viewModel.participants.contains { $0.id == AIConstants.AI_USER_ID }
+
+            Text(hasAI ? "\(humanParticipantCount) MEMBERS + AI" : "\(humanParticipantCount) MEMBERS")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .fontWeight(.semibold)
@@ -317,13 +391,22 @@ struct GroupInfoView: View {
                                 isCurrentUser: isCurrentUser
                             )
                             .contextMenu {
-                                if !isCurrentUser {
+                                let isAIUser = participant.id == AIConstants.AI_USER_ID
+
+                                if !isCurrentUser && !isAIUser {
                                     Button(role: .destructive) {
                                         participantToRemove = participant
                                         showRemoveConfirmation = true
                                     } label: {
                                         Label("Remove from Group", systemImage: "person.badge.minus")
                                     }
+                                } else if isAIUser {
+                                    Button {
+                                        // Do nothing - just show info
+                                    } label: {
+                                        Label("Use AI toggle to remove AI", systemImage: "info.circle")
+                                    }
+                                    .disabled(true)
                                 }
                             }
 
@@ -504,6 +587,30 @@ struct GroupInfoView: View {
         }
     }
 
+    private func toggleAI(enabled: Bool) async {
+        guard let conversationId = conversation.id else { return }
+
+        // Store the previous state in case we need to revert
+        let previousState = aiEnabled
+
+        // Optimistically update UI
+        aiEnabled = enabled
+
+        do {
+            try await viewModel.toggleAI(conversation: conversation, enabled: enabled)
+
+            // Track analytics
+            AnalyticsService.shared.trackEvent(
+                enabled ? "ai_enabled" : "ai_disabled",
+                parameters: ["conversation_id": conversationId]
+            )
+        } catch {
+            // Revert on error
+            aiEnabled = previousState
+            // Error is shown via viewModel.errorMessage
+        }
+    }
+
     private func setupConversationListener() {
         guard let conversationId = conversation.id else {
             return
@@ -547,6 +654,9 @@ struct GroupInfoView: View {
                         }
 
                         self.conversation = updatedConversation
+
+                        // Update aiEnabled state when conversation updates
+                        self.aiEnabled = updatedConversation.aiEnabled ?? false
                     }
                 }
             }

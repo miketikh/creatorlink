@@ -18,7 +18,22 @@ struct Message: Identifiable, Codable, Hashable, Equatable {
     let status: MessageStatus
     let readBy: [String: Date]          // Map of userId to timestamp when read
     let imageUrl: String?               // Optional image URL (for Phase 6)
-    let metadata: [String: String]?     // Optional metadata for AI features (Phase 8)
+
+    /// Optional metadata for AI features and system messages
+    ///
+    /// Standard AI metadata keys:
+    /// - `"ai_generated"` or `"isAIMessage"` - Flags AI-generated messages (value: "true")
+    /// - `"faqReference"` - messageId of original answer being referenced
+    /// - `"matchConfidence"` - Similarity score as string (e.g., "0.92")
+    /// - `"matchedQuestion"` - The original question text that was matched
+    /// - `"suggestedAnswer"` - The AI's suggested answer text to display
+    ///
+    /// Notes:
+    /// - Metadata is set by the Python AI service for AI-generated messages
+    /// - All values must be strings (Firestore map<string, string> limitation)
+    /// - iOS should check both "ai_generated" and "isAIMessage" keys for compatibility
+    /// - System messages use `"isSystemMessage": "true"`
+    let metadata: [String: String]?
 
     // Custom initializer for manual construction
     init(id: String? = nil, conversationId: String, senderId: String, participantIds: [String], text: String, timestamp: Date, status: MessageStatus, readBy: [String: Date], imageUrl: String?, metadata: [String: String]?) {

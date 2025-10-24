@@ -204,6 +204,57 @@ class GroupInfoViewModel {
         }
     }
 
+    // MARK: - AI Management
+
+    /// Toggles AI assistant for the conversation
+    /// - Parameters:
+    ///   - conversation: The conversation to update
+    ///   - enabled: Whether to enable or disable AI
+    func toggleAI(conversation: Conversation, enabled: Bool) async throws {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            // Create AI config if enabling
+            let aiConfig: Conversation.AIConfig? = enabled ? Conversation.AIConfig(faqDetectionEnabled: true, minimumSimilarity: 0.85) : nil
+
+            try await conversationService.updateAISettings(
+                conversationId: conversation.id ?? "",
+                aiEnabled: enabled,
+                aiConfig: aiConfig
+            )
+
+            isLoading = false
+        } catch {
+            errorMessage = enabled ? "Couldn't enable AI Assistant. Please check your connection and try again." : "Couldn't disable AI Assistant. Please check your connection and try again."
+            isLoading = false
+            throw error
+        }
+    }
+
+    /// Updates AI configuration for the conversation
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - config: The new AI configuration
+    func updateAIConfig(conversationId: String, config: Conversation.AIConfig) async throws {
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            try await conversationService.updateAISettings(
+                conversationId: conversationId,
+                aiEnabled: true,
+                aiConfig: config
+            )
+
+            isLoading = false
+        } catch {
+            errorMessage = "Couldn't update AI settings. Please check your connection and try again."
+            isLoading = false
+            throw error
+        }
+    }
+
     // MARK: - Helper Methods
 
     /// Validates an image URL

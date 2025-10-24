@@ -12,6 +12,10 @@ struct ParticipantRowView: View {
     var showOnlineStatus: Bool = true
     var isCurrentUser: Bool = false
 
+    private var isAIUser: Bool {
+        participant.id == AIConstants.AI_USER_ID
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // User avatar
@@ -41,20 +45,47 @@ struct ParticipantRowView: View {
             // User info
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
+                    // AI sparkles icon
+                    if isAIUser {
+                        Image(systemName: "sparkles")
+                            .font(.caption)
+                            .foregroundColor(.purple)
+                    }
+
                     Text(participant.displayName)
                         .font(isCurrentUser ? .headline : .body)
-                        .foregroundColor(.primary)
+                        .foregroundColor(isAIUser ? .purple : .primary)
 
                     if isCurrentUser {
                         Text("(You)")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
+
+                    // AI badge
+                    if isAIUser {
+                        Text("AI")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.purple.opacity(0.15))
+                            .foregroundColor(.purple)
+                            .cornerRadius(4)
+                    }
                 }
 
                 if showOnlineStatus {
                     HStack(spacing: 4) {
-                        if participant.isOnline {
+                        if isAIUser {
+                            Circle()
+                                .fill(Color.purple)
+                                .frame(width: 8, height: 8)
+
+                            Text("Always Online")
+                                .font(.caption)
+                                .foregroundColor(.purple)
+                        } else if participant.isOnline {
                             Circle()
                                 .fill(Color.green)
                                 .frame(width: 8, height: 8)
@@ -87,11 +118,16 @@ struct ParticipantRowView: View {
 
     private var accessibilityLabel: String {
         var label = participant.displayName
+        if isAIUser {
+            label += ", AI Assistant"
+        }
         if isCurrentUser {
             label += ", You"
         }
         if showOnlineStatus {
-            if participant.isOnline {
+            if isAIUser {
+                label += ", Always Online"
+            } else if participant.isOnline {
                 label += ", Online"
             } else {
                 label += ", \(formattedLastSeen(participant.lastSeen))"

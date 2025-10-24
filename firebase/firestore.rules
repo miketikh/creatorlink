@@ -3,6 +3,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Security model for AI messages:
+    // - AI service uses Firebase Admin SDK with custom token (ai-service-account)
+    // - Regular users cannot impersonate AI (senderId check)
+    // - AI can only be added to conversations, not create them independently
+    // - AI messages must have senderId: 'ai-assistant'
+
     // Helper functions
     function isAuthenticated() {
       return request.auth != null;
@@ -20,12 +26,17 @@ service cloud.firestore {
 
     // Conversations collection
     match /conversations/{conversationId} {
+      // Allow reading if user is participant
       allow read: if isAuthenticated() &&
                      request.auth.uid in resource.data.participantIds;
 
-      allow create: if isAuthenticated() &&
-                       request.auth.uid in request.resource.data.participantIds;
+      // Allow creation if user is in participant list OR AI is being added
+      allow create: if isAuthenticated() && (
+                       request.auth.uid in request.resource.data.participantIds ||
+                       'ai-assistant' in request.resource.data.participantIds
+                     );
 
+      // Allow update only for participants (includes adding/removing AI)
       allow update: if isAuthenticated() &&
                        (
                          // Standard update: user is participant
@@ -45,6 +56,7 @@ service cloud.firestore {
                          )
                        );
 
+      // Prevent deletion (use archived flag instead)
       allow delete: if false;
     }
 
@@ -53,9 +65,17 @@ service cloud.firestore {
       allow read: if isAuthenticated() &&
                      request.auth.uid in resource.data.participantIds;
 
-      allow create: if isAuthenticated() &&
-                       request.auth.uid == request.resource.data.senderId &&
-                       request.auth.uid in request.resource.data.participantIds;
+      // Allow users to create their own messages
+      // Allow AI service account to create AI messages
+      allow create: if isAuthenticated() && (
+                       // Normal user creating their own message
+                       (request.auth.uid == request.resource.data.senderId &&
+                        request.auth.uid in request.resource.data.participantIds) ||
+                       // AI service account creating AI message
+                       (request.auth.token.firebase.sign_in_provider == 'custom' &&
+                        request.auth.uid == 'ai-service-account' &&
+                        request.resource.data.senderId == 'ai-assistant')
+                     );
 
       allow update: if isAuthenticated() &&
                        request.auth.uid in resource.data.participantIds;

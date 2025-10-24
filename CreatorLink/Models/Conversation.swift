@@ -20,9 +20,27 @@ struct Conversation: Identifiable, Codable, Hashable {
     let lastMessageStatus: MessageStatus? // Status of the last message
     let unreadCounts: [String: Int]? // Denormalized unread count per user (userId: count)
     let mutedBy: [String]?          // Array of user IDs who have muted this conversation
+    let aiEnabled: Bool?            // Optional - whether AI assistant is enabled for this conversation
+    let aiConfig: AIConfig?         // Optional - AI configuration settings (only present when aiEnabled is true)
+
+    /// AI configuration for conversation-level AI features
+    struct AIConfig: Codable, Hashable {
+        let faqDetectionEnabled: Bool
+        let minimumSimilarity: Double
+
+        init(faqDetectionEnabled: Bool = true, minimumSimilarity: Double = 0.85) {
+            self.faqDetectionEnabled = faqDetectionEnabled
+            self.minimumSimilarity = minimumSimilarity
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case faqDetectionEnabled
+            case minimumSimilarity
+        }
+    }
 
     // Custom initializer for manual construction
-    init(id: String? = nil, participantIds: [String], lastMessage: String, lastMessageTime: Date, isGroupChat: Bool, groupName: String?, groupImageUrl: String? = nil, lastMessageSenderId: String? = nil, lastMessageStatus: MessageStatus? = nil, unreadCounts: [String: Int]? = nil, mutedBy: [String]? = nil) {
+    init(id: String? = nil, participantIds: [String], lastMessage: String, lastMessageTime: Date, isGroupChat: Bool, groupName: String?, groupImageUrl: String? = nil, lastMessageSenderId: String? = nil, lastMessageStatus: MessageStatus? = nil, unreadCounts: [String: Int]? = nil, mutedBy: [String]? = nil, aiEnabled: Bool? = nil, aiConfig: AIConfig? = nil) {
         self.id = id
         self.participantIds = participantIds
         self.lastMessage = lastMessage
@@ -34,6 +52,8 @@ struct Conversation: Identifiable, Codable, Hashable {
         self.lastMessageStatus = lastMessageStatus
         self.unreadCounts = unreadCounts
         self.mutedBy = mutedBy
+        self.aiEnabled = aiEnabled
+        self.aiConfig = aiConfig
     }
 
     enum CodingKeys: String, CodingKey {
@@ -48,6 +68,8 @@ struct Conversation: Identifiable, Codable, Hashable {
         case lastMessageStatus
         case unreadCounts
         case mutedBy
+        case aiEnabled
+        case aiConfig
     }
 
     // Hashable conformance - include ALL properties that affect UI rendering (per ios_dev_notes.md)
@@ -61,6 +83,8 @@ struct Conversation: Identifiable, Codable, Hashable {
         hasher.combine(groupImageUrl)
         hasher.combine(lastMessageSenderId)
         hasher.combine(lastMessageStatus)
+        hasher.combine(aiEnabled)
+        hasher.combine(aiConfig)
         // Note: unreadCounts is intentionally excluded from hash since it changes frequently
         // and we want real-time updates via the listener to trigger UI updates
     }
@@ -92,6 +116,8 @@ struct Conversation: Identifiable, Codable, Hashable {
                lhs.lastMessageSenderId == rhs.lastMessageSenderId &&
                lhs.lastMessageStatus == rhs.lastMessageStatus &&
                unreadCountsEqual &&
-               mutedByEqual
+               mutedByEqual &&
+               lhs.aiEnabled == rhs.aiEnabled &&
+               lhs.aiConfig == rhs.aiConfig
     }
 }

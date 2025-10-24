@@ -36,8 +36,10 @@ class ConversationService {
     /// - Parameter currentUserId: The ID of the current user
     /// - Parameter groupName: Optional custom name for group conversations
     /// - Parameter groupImageUrl: Optional custom image URL for group conversations
+    /// - Parameter aiEnabled: Optional flag to enable AI assistant for this conversation
+    /// - Parameter aiConfig: Optional AI configuration settings
     /// - Returns: The created or existing Conversation
-    func createConversation(participantIds: [String], currentUserId: String, groupName: String? = nil, groupImageUrl: String? = nil) async throws -> Conversation {
+    func createConversation(participantIds: [String], currentUserId: String, groupName: String? = nil, groupImageUrl: String? = nil, aiEnabled: Bool? = nil, aiConfig: Conversation.AIConfig? = nil) async throws -> Conversation {
         // Check if conversation already exists
         if let existingConversation = try await findExistingConversation(participantIds: participantIds, currentUserId: currentUserId) {
             return existingConversation
@@ -60,12 +62,19 @@ class ConversationService {
 
         // Initialize unreadCounts to 0 for all participants (optimization for unread badges)
         var unreadCounts: [String: Int] = [:]
-        for participantId in participantIds {
+        var finalParticipantIds = participantIds
+
+        // If AI is enabled, add AI user to participants
+        if let aiEnabled = aiEnabled, aiEnabled, !finalParticipantIds.contains(AIConstants.AI_USER_ID) {
+            finalParticipantIds.append(AIConstants.AI_USER_ID)
+        }
+
+        for participantId in finalParticipantIds {
             unreadCounts[participantId] = 0
         }
 
-        let conversationData: [String: Any] = [
-            "participantIds": participantIds.sorted(), // Sort for consistent lookups
+        var conversationData: [String: Any] = [
+            "participantIds": finalParticipantIds.sorted(), // Sort for consistent lookups
             "lastMessage": "",
             "lastMessageTime": Timestamp(date: Date()),
             "isGroupChat": isGroupChat,
@@ -74,18 +83,31 @@ class ConversationService {
             "unreadCounts": unreadCounts
         ]
 
+        // Add AI fields if provided
+        if let aiEnabled = aiEnabled {
+            conversationData["aiEnabled"] = aiEnabled
+        }
+        if let aiConfig = aiConfig {
+            conversationData["aiConfig"] = [
+                "faqDetectionEnabled": aiConfig.faqDetectionEnabled,
+                "minimumSimilarity": aiConfig.minimumSimilarity
+            ]
+        }
+
         do {
             let docRef = try await conversationsCollection.addDocument(data: conversationData)
 
             let conversation = Conversation(
                 id: docRef.documentID,
-                participantIds: participantIds.sorted(),
+                participantIds: finalParticipantIds.sorted(),
                 lastMessage: "",
                 lastMessageTime: Date(),
                 isGroupChat: isGroupChat,
                 groupName: groupName,
                 groupImageUrl: finalGroupImageUrl,
-                unreadCounts: unreadCounts
+                unreadCounts: unreadCounts,
+                aiEnabled: aiEnabled,
+                aiConfig: aiConfig
             )
 
             return conversation
@@ -493,6 +515,66 @@ class ConversationService {
         } catch let error as ConversationError {
             throw error
         } catch {
+            throw ConversationError.updateFailed(error)
+        }
+    }
+
+    // MARK: - AI Settings Management
+
+    /// Updates AI settings for a conversation
+    /// - Parameters:
+    ///   - conversationId: The ID of the conversation
+    ///   - aiEnabled: Whether AI assistant is enabled
+    ///   - aiConfig: Optional AI configuration settings
+    func updateAISettings(conversationId: String, aiEnabled: Bool, aiConfig: Conversation.AIConfig?) async throws {
+        do {
+            let docRef = conversationsCollection.document(conversationId)
+            let document = try await docRef.getDocument()
+
+            guard document.exists,
+                  let conversation = try? document.data(as: Conversation.self) else {
+                throw ConversationError.invalidData
+            }
+
+            // Build update dictionary
+            var updateData: [String: Any] = [
+                "aiEnabled": aiEnabled
+            ]
+
+            // Add or remove AI config
+            if let config = aiConfig, aiEnabled {
+                updateData["aiConfig"] = [
+                    "faqDetectionEnabled": config.faqDetectionEnabled,
+                    "minimumSimilarity": config.minimumSimilarity
+                ]
+            } else if !aiEnabled {
+                updateData["aiConfig"] = FieldValue.delete()
+            }
+
+            // Add or remove AI user from participants
+            if aiEnabled {
+                // Check if AI user is already in participants
+                if !conversation.participantIds.contains(AIConstants.AI_USER_ID) {
+                    updateData["participantIds"] = FieldValue.arrayUnion([AIConstants.AI_USER_ID])
+                    updateData["unreadCounts.\(AIConstants.AI_USER_ID)"] = 0
+                    print("✅ Adding AI user to conversation: \(conversationId)")
+                }
+            } else {
+                // Remove AI user from participants
+                if conversation.participantIds.contains(AIConstants.AI_USER_ID) {
+                    updateData["participantIds"] = FieldValue.arrayRemove([AIConstants.AI_USER_ID])
+                    updateData["unreadCounts.\(AIConstants.AI_USER_ID)"] = FieldValue.delete()
+                    print("✅ Removing AI user from conversation: \(conversationId)")
+                }
+            }
+
+            // Update Firestore
+            try await docRef.updateData(updateData)
+            print("✅ AI settings updated for conversation \(conversationId): enabled=\(aiEnabled)")
+        } catch let error as ConversationError {
+            throw error
+        } catch {
+            print("❌ Failed to update AI settings: \(error.localizedDescription)")
             throw ConversationError.updateFailed(error)
         }
     }

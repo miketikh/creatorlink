@@ -31,6 +31,10 @@ struct ChatDetailView: View {
     @State private var selectedMessageForDetails: Message?
     @State private var userLeftGroup = false
     @State private var showLeftGroupConfirmation = false
+    @State private var highlightedMessageId: String?
+    @State private var faqScrollError: String?
+    @State private var showFAQError = false
+    @State private var isLoadingFAQReference = false
     @FocusState private var isInputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -83,6 +87,19 @@ struct ChatDetailView: View {
 
             // Input area
             messageInputArea
+        }
+        .overlay {
+            // Loading indicator for FAQ reference fetching
+            if isLoadingFAQReference {
+                ZStack {
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(1.5)
+                }
+            }
         }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -241,6 +258,11 @@ struct ChatDetailView: View {
         } message: {
             Text("You have left the group")
         }
+        .alert("Message Not Found", isPresented: $showFAQError) {
+            Button("OK") { }
+        } message: {
+            Text(faqScrollError ?? "The referenced message could not be found.")
+        }
         .sheet(item: $selectedMessageForDetails) { message in
             // Get participant profiles for the message
             let participantProfiles = conversation.participantIds.compactMap { userId in
@@ -320,6 +342,11 @@ struct ChatDetailView: View {
                                         if conversation.isGroupChat && viewModel.isFromCurrentUser(message) {
                                             selectedMessageForDetails = message
                                         }
+                                    },
+                                    onTapFAQReference: { messageId in
+                                        Task {
+                                            await scrollToMessage(messageId: messageId)
+                                        }
                                     }
                                 )
                             }
@@ -335,6 +362,11 @@ struct ChatDetailView: View {
                                     )
                                 }
                             )
+                            .background(
+                                highlightedMessageId == message.id ?
+                                    Color.yellow.opacity(0.3) : Color.clear
+                            )
+                            .animation(.easeInOut(duration: 0.3), value: highlightedMessageId)
                         }
                     }
                 }
@@ -590,6 +622,50 @@ struct ChatDetailView: View {
 
     private func formattedLastSeen(_ date: Date) -> String {
         DateFormatters.formatLastOnline(date)
+    }
+
+    private func scrollToMessage(messageId: String) async {
+        // Set loading state
+        await MainActor.run {
+            isLoadingFAQReference = true
+        }
+
+        // First check if message is in current loaded messages
+        if viewModel.messages.contains(where: { $0.id == messageId }) {
+            // Message already loaded - scroll immediately
+            await MainActor.run {
+                isLoadingFAQReference = false
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    scrollProxy?.scrollTo(messageId, anchor: .center)
+                }
+                highlightedMessageId = messageId
+            }
+        } else {
+            // Message not loaded - fetch it
+            if let _ = await viewModel.fetchMessageById(messageId: messageId) {
+                await MainActor.run {
+                    isLoadingFAQReference = false
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        scrollProxy?.scrollTo(messageId, anchor: .center)
+                    }
+                    highlightedMessageId = messageId
+                }
+            } else {
+                // Message not found - show error
+                await MainActor.run {
+                    isLoadingFAQReference = false
+                    faqScrollError = "The referenced message could not be found. It may have been deleted."
+                    showFAQError = true
+                }
+                return
+            }
+        }
+
+        // Clear highlight after delay
+        try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+        await MainActor.run {
+            highlightedMessageId = nil
+        }
     }
 
     private func sendMessage() async {

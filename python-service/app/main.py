@@ -40,6 +40,12 @@ logger.info("Application startup complete")
 
 
 # Pydantic models for request/response validation
+class AIConfig(BaseModel):
+    """AI configuration for conversation."""
+    faqDetectionEnabled: bool = True
+    minimumSimilarity: float = 0.85
+
+
 class MessageRequest(BaseModel):
     """Request model for incoming messages from Cloud Functions."""
     messageId: str
@@ -48,6 +54,7 @@ class MessageRequest(BaseModel):
     text: str
     timestamp: Dict[str, int]  # Firebase timestamp object with _seconds and _nanoseconds
     participantIds: List[str]
+    aiConfig: Optional[AIConfig] = None
 
 
 class MessageResponse(BaseModel):
@@ -120,6 +127,8 @@ async def process_message(request: MessageRequest) -> MessageResponse:
     try:
         logger.info(f"Received message request: {request.messageId} from {request.senderId}")
         logger.info(f"Message text: '{request.text}'")
+        logger.info(f"AI Config: faqDetection={request.aiConfig.faqDetectionEnabled if request.aiConfig else True}, "
+                    f"similarity={request.aiConfig.minimumSimilarity if request.aiConfig else 0.85}")
 
         # Process message with AI agent
         ai_response_text = await ai_agent.process(request.text)
@@ -127,16 +136,25 @@ async def process_message(request: MessageRequest) -> MessageResponse:
         # Create metadata for AI-generated message
         # Note: All values must be strings to match iOS Message model [String: String]
         response_metadata = {
-            "ai_generated": "true",
+            "ai_generated": "true",  # Keep for backward compatibility
             "original_message_id": request.messageId,
-            "agent_type": "echo",
-            "agent_version": "0.1.0"
+            "agent_type": "faq_detector",  # Changed from "echo"
+            "agent_version": "0.2.0",  # Bumped version
         }
+
+        # TODO Phase 5: Implement FAQ detection
+        # 1. Fetch recent messages from conversation
+        # 2. Use embedding/similarity search to find matches
+        # 3. If match found above minimumSimilarity threshold:
+        #    - Add faqReference to metadata
+        #    - Add matchConfidence to metadata
+        #    - Add matchedQuestion to metadata
+        #    - Format response text to reference original answer
 
         # Send AI response back to Firestore
         response_message_id = await firebase_client.send_message(
             conversation_id=request.conversationId,
-            sender_id="ai-agent",  # Special AI user ID
+            sender_id="ai-assistant",  # Changed from "ai-agent"
             text=ai_response_text,
             participant_ids=request.participantIds,
             metadata=response_metadata

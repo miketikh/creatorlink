@@ -63,6 +63,41 @@ This document provides comprehensive documentation for all Firebase data structu
 - `lastSeen` uses `FieldValue.serverTimestamp()` for consistency
 - `isOnline` is denormalized from Realtime Database for query performance
 
+#### AI User Profile
+
+**Special User ID:** `ai-assistant` (defined in `AIConstants.AI_USER_ID`)
+
+**Purpose:** System user that represents the AI assistant in conversations with AI features enabled.
+
+**Required Fields:**
+```json
+{
+  "id": "ai-assistant",
+  "displayName": "AI Assistant",
+  "email": "ai@creatorlink.app",
+  "photoURL": "https://ui-avatars.com/api/?name=AI&background=6366f1&color=fff",
+  "isOnline": true,
+  "lastSeen": {
+    "_seconds": 1729699200,
+    "_nanoseconds": 0
+  }
+}
+```
+
+**Setup Notes:**
+- AI user must be created in Firestore before being added to conversations
+- AI user ID must match `AIConstants.AI_USER_ID` constant in iOS app
+- AI user ID must match what Python AI service and Firebase Cloud Functions use
+- `isOnline` should be `true` to make AI always appear available
+- `photoURL` uses UI Avatars API with indigo background (6366f1) to distinguish from regular users
+- Creation options:
+  - Manual creation via Firebase Console (for development)
+  - Seed data script (recommended for Firebase Emulator)
+  - One-time setup script via Firebase Admin SDK (for production)
+- AI user follows standard UserProfile structure - no special model needed
+
+**TODO:** Update seed data script at `/Users/Gauntlet/gauntlet/CreatorLink/firebase/seed-data.js` to automatically create AI user document during Firebase Emulator initialization (Phase 2, PR 2.7)
+
 ---
 
 ### Collection: `conversations`
@@ -84,6 +119,22 @@ This document provides comprehensive documentation for all Firebase data structu
 - `lastMessageStatus: MessageStatus?` - *Optional* status of the last message (enum: sending, sent, delivered, read)
 - `unreadCounts: [String: Int]?` - *Optional* denormalized unread count per user (userId: count)
 - `mutedBy: [String]?` - *Optional* array of user IDs who have muted this conversation
+- `aiEnabled: Bool?` - *Optional* whether AI assistant is enabled for this conversation (nil for existing conversations without AI)
+- `aiConfig: AIConfig?` - *Optional* AI configuration settings (only present when aiEnabled is true)
+
+#### AIConfig Struct
+
+**Purpose:** Configuration settings for AI assistant features in a conversation.
+
+**Fields:**
+- `faqDetectionEnabled: Bool` - Whether FAQ detection is enabled (default: true)
+- `minimumSimilarity: Double` - Minimum similarity threshold for FAQ matching (default: 0.85, range: 0.0-1.0)
+
+**Notes:**
+- AIConfig is a nested struct within Conversation
+- Only present when `aiEnabled` is true
+- Default values make it easy to enable AI with sensible defaults
+- minimumSimilarity of 0.85 represents 85% similarity threshold for FAQ matching
 
 #### Relationships
 
@@ -95,7 +146,7 @@ This document provides comprehensive documentation for all Firebase data structu
 ```json
 {
   "id": "conv456",
-  "participantIds": ["user123", "user456", "user789"],
+  "participantIds": ["user123", "user456", "user789", "ai-assistant"],
   "lastMessage": "See you tomorrow!",
   "lastMessageTime": {
     "_seconds": 1729699200,
@@ -111,7 +162,12 @@ This document provides comprehensive documentation for all Firebase data structu
     "user456": 2,
     "user789": 1
   },
-  "mutedBy": ["user789"]
+  "mutedBy": ["user789"],
+  "aiEnabled": true,
+  "aiConfig": {
+    "faqDetectionEnabled": true,
+    "minimumSimilarity": 0.85
+  }
 }
 ```
 
@@ -148,6 +204,9 @@ This document provides comprehensive documentation for all Firebase data structu
 - Uses `FieldValue.arrayUnion()` and `FieldValue.arrayRemove()` for concurrent-safe participant management
 - Last person leaving a group triggers conversation deletion
 - System messages use `senderId: "system"` for member join/leave events
+- `aiEnabled` and `aiConfig` are optional for backward compatibility - existing conversations without AI work without migration
+- When AI is enabled, "ai-assistant" user ID is added to `participantIds`
+- AIConfig should only exist when aiEnabled is true (enforced in UI layer)
 
 ---
 
@@ -168,7 +227,26 @@ This document provides comprehensive documentation for all Firebase data structu
 - `status: MessageStatus` - Delivery status (enum: sending, sent, delivered, read)
 - `readBy: [String: Date]` - Map of userId to timestamp when read (stored as Firestore Timestamps)
 - `imageUrl: String?` - *Optional* image URL for media messages (for future Phase 6)
-- `metadata: [String: String]?` - *Optional* metadata map for AI features and system messages (for future Phase 8)
+- `metadata: [String: String]?` - *Optional* metadata map for AI features and system messages
+
+#### AI Metadata Keys
+
+When `metadata` is present on AI-generated messages, it may contain the following standard keys:
+
+- `"ai_generated"` or `"isAIMessage"` - Flags message as AI-generated (value: "true")
+  - Python service currently uses `"ai_generated"`
+  - iOS should check both keys for compatibility
+- `"faqReference"` - Message ID of the original answer being referenced (value: message document ID)
+- `"matchConfidence"` - Similarity score as string (value: "0.0" to "1.0", e.g., "0.92")
+- `"matchedQuestion"` - The original question text that was matched (value: question string)
+- `"suggestedAnswer"` - The AI's suggested answer text to display in the FAQ link (value: answer string)
+- `"isSystemMessage"` - Flags system messages like member join/leave (value: "true")
+
+**Notes:**
+- All metadata values must be strings (Firestore `map<string, string>` limitation)
+- Metadata is set by the Python AI service for AI-generated messages
+- Metadata is optional and only present on AI messages and system messages
+- Regular user messages have `metadata: null`
 
 #### Relationships
 
@@ -221,6 +299,32 @@ This document provides comprehensive documentation for all Firebase data structu
   "imageUrl": null,
   "metadata": {
     "isSystemMessage": "true"
+  }
+}
+```
+
+#### Example Document (AI-Generated Message)
+
+```json
+{
+  "id": "msg791",
+  "conversationId": "conv456",
+  "senderId": "ai-assistant",
+  "participantIds": ["user123", "user456", "user789", "ai-assistant"],
+  "text": "This question was previously answered here: [link to message]",
+  "timestamp": {
+    "_seconds": 1729699400,
+    "_nanoseconds": 0
+  },
+  "status": "sent",
+  "readBy": {},
+  "imageUrl": null,
+  "metadata": {
+    "ai_generated": "true",
+    "faqReference": "msg789",
+    "matchConfidence": "0.92",
+    "matchedQuestion": "What are your rates?",
+    "suggestedAnswer": "My rates are $500/hour for consulting work."
   }
 }
 ```

@@ -150,6 +150,36 @@ class ChatViewModel {
         }
     }
 
+    /// Fetches a specific message by its ID
+    /// - Parameter messageId: The ID of the message to fetch
+    /// - Returns: The message if found, nil otherwise
+    func fetchMessageById(messageId: String) async -> Message? {
+        // First check if message is already loaded in memory
+        if let cachedMessage = messages.first(where: { $0.id == messageId }) {
+            return cachedMessage
+        }
+
+        // If not in memory, fetch from Firestore
+        do {
+            let db = FirestoreService.shared.db
+            let messageDoc = try await db
+                .collection("messages")
+                .document(messageId)
+                .getDocument()
+
+            if messageDoc.exists {
+                let message = try messageDoc.data(as: Message.self)
+                return message
+            } else {
+                print("Message \(messageId) not found in Firestore")
+                return nil
+            }
+        } catch {
+            print("Error fetching message \(messageId): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// Marks messages as read by the current user
     func markMessagesAsRead() async {
         guard let currentUserId = currentUserId else { return }

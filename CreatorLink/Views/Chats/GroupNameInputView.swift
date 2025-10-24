@@ -19,6 +19,7 @@ struct GroupNameInputView: View {
     @State private var errorMessage: String?
     @State private var showImagePreview = false
     @State private var participantNames: [String] = []
+    @State private var enableAI = false
 
     private let maxGroupNameLength = 35
 
@@ -93,6 +94,15 @@ struct GroupNameInputView: View {
                     Text("Group Image")
                 } footer: {
                     Text("Provide an image URL for the group avatar, or leave blank to use a default")
+                }
+
+                // AI Assistant section
+                Section {
+                    Toggle("Enable AI Assistant", isOn: $enableAI)
+                } header: {
+                    Text("AI Assistant")
+                } footer: {
+                    Text("AI can help answer frequently asked questions by linking similar questions to previous answers")
                 }
 
                 // Participants section
@@ -217,11 +227,17 @@ struct GroupNameInputView: View {
 
             // Create the conversation
             let imageUrl = groupImageUrl.isEmpty ? nil : groupImageUrl
+
+            // Create AI config if AI is enabled
+            let aiConfig: Conversation.AIConfig? = enableAI ? Conversation.AIConfig(faqDetectionEnabled: true, minimumSimilarity: 0.85) : nil
+
             _ = try await ConversationService.shared.createConversation(
                 participantIds: allParticipants,
                 currentUserId: currentUserId,
                 groupName: finalGroupName,
-                groupImageUrl: imageUrl
+                groupImageUrl: imageUrl,
+                aiEnabled: enableAI ? true : nil,
+                aiConfig: aiConfig
             )
 
             // Track analytics

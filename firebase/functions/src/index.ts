@@ -13,6 +13,9 @@ import axios from "axios";
 // Initialize Firebase Admin SDK
 admin.initializeApp();
 
+// AI user constant - must match AIConstants.swift in iOS app
+const AI_USER_ID = "ai-assistant";
+
 /**
  * Triggered when a new message is created in Firestore
  * Sends the message to the Python AI service for processing
@@ -24,7 +27,7 @@ export const onMessageCreated = onDocumentCreated(
     const messageData = event.data?.data();
 
     // Skip processing if this is an AI-generated message to prevent infinite loops
-    if (messageData?.senderId === "ai-agent") {
+    if (messageData?.senderId === AI_USER_ID) {
       logger.info("Skipping AI-generated message", {
         messageId,
         senderId: messageData.senderId,
@@ -39,6 +42,43 @@ export const onMessageCreated = onDocumentCreated(
       conversationId: messageData?.conversationId,
     });
 
+    // Fetch conversation to check if AI is enabled
+    logger.info("Checking if AI is enabled for conversation", {
+      conversationId: messageData?.conversationId,
+    });
+
+    const conversationRef = admin.firestore()
+      .collection("conversations")
+      .doc(messageData?.conversationId);
+
+    const conversationDoc = await conversationRef.get();
+
+    if (!conversationDoc.exists) {
+      logger.warn("Conversation not found", {
+        conversationId: messageData?.conversationId,
+      });
+      return null;
+    }
+
+    const conversationData = conversationDoc.data();
+
+    // Only proceed if AI is enabled for this conversation
+    if (!conversationData?.aiEnabled) {
+      logger.info("AI not enabled for conversation - skipping", {
+        conversationId: messageData?.conversationId,
+        aiEnabled: conversationData?.aiEnabled,
+      });
+      return null;
+    }
+
+    // Check if FAQ detection is enabled (if aiConfig exists)
+    if (conversationData?.aiConfig?.faqDetectionEnabled === false) {
+      logger.info("FAQ detection disabled - skipping", {
+        conversationId: messageData?.conversationId,
+      });
+      return null;
+    }
+
     // Construct payload for Python service
     const payload = {
       messageId,
@@ -47,6 +87,10 @@ export const onMessageCreated = onDocumentCreated(
       text: messageData?.text,
       timestamp: messageData?.timestamp,
       participantIds: messageData?.participantIds,
+      aiConfig: conversationData?.aiConfig || {
+        faqDetectionEnabled: true,
+        minimumSimilarity: 0.85,
+      },
     };
 
     try {

@@ -101,6 +101,22 @@ struct AuthView: View {
             }
             .padding(.horizontal, 40)
 
+            #if DEBUG
+            // TODO: Remove before production release
+            // Debug-only shortcut for faster testing
+            Button(action: {
+                Task {
+                    await signInAsAlice()
+                }
+            }) {
+                Text("Sign in as Alice")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .disabled(isSigningIn)
+            .padding(.top, 8)
+            #endif
+
             Spacer()
         }
         .padding()
@@ -121,6 +137,25 @@ struct AuthView: View {
 
         isSigningIn = false
     }
+
+    #if DEBUG
+    // Debug-only sign-in for testing
+    private func signInAsAlice() async {
+        isSigningIn = true
+        errorMessage = nil
+
+        do {
+            _ = try await authService.signInWithEmail(
+                email: "alice.johnson@test.com",
+                password: "password"
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isSigningIn = false
+    }
+    #endif
 }
 
 #Preview {

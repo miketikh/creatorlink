@@ -20,12 +20,14 @@ struct MessageBubbleView: View {
     var deliveredCount: Int? = nil
     var totalParticipants: Int? = nil
     var onTapStatusIndicator: (() -> Void)? = nil
+    var onTapFAQReference: ((String) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
             // Sender name header (only for group chats, not current user)
-            if showSenderInfo && isGroupChat && !isFromCurrentUser, let name = senderName {
-                MessageSenderHeaderView(senderName: name, alignment: .leading)
+            if showSenderInfo && isGroupChat && !isFromCurrentUser {
+                let displayName = message.senderId == AIConstants.AI_USER_ID ? AIConstants.AI_DISPLAY_NAME : (senderName ?? "Someone")
+                MessageSenderHeaderView(senderName: displayName, alignment: .leading)
                     .padding(.leading, 42) // Align with message text (avatar width + spacing)
             }
 
@@ -63,28 +65,56 @@ struct MessageBubbleView: View {
                 }
 
                 VStack(alignment: isFromCurrentUser ? .trailing : .leading, spacing: 4) {
-                    // Message bubble with optional AI badge
-                    HStack(spacing: 6) {
-                        if isAIMessage && !isFromCurrentUser {
-                            Image(systemName: "sparkles")
-                                .font(.caption2)
-                                .foregroundColor(.purple)
-                        }
+                    // Only show message bubble if there's actual text content
+                    if !isFAQOnlyMessage {
+                        // Message bubble with optional AI badge
+                        HStack(spacing: 6) {
+                            if isAIMessage && !isFromCurrentUser {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "sparkles")
+                                        .font(.caption2)
+                                        .foregroundColor(.purple)
+                                    Text("AI")
+                                        .font(.caption)
+                                        .foregroundColor(.purple)
+                                }
+                            }
 
-                        Text(message.text)
+                            Text(message.text)
 
-                        if isAIMessage && isFromCurrentUser {
-                            Image(systemName: "sparkles")
-                                .font(.caption2)
-                                .foregroundColor(.purple.opacity(0.8))
+                            if isAIMessage && isFromCurrentUser {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "sparkles")
+                                        .font(.caption2)
+                                        .foregroundColor(.purple.opacity(0.8))
+                                    Text("AI")
+                                        .font(.caption)
+                                        .foregroundColor(.purple.opacity(0.8))
+                                }
+                            }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 12)
+                        .background(backgroundColor)
+                        .foregroundColor(textColor)
+                        .cornerRadius(18)
+                        .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: bubbleAlignment)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .background(backgroundColor)
-                    .foregroundColor(textColor)
-                    .cornerRadius(18)
-                    .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: bubbleAlignment)
+
+                    // FAQ Reference Link (if metadata contains faqReference)
+                    if let faqRefId = message.metadata?["faqReference"] {
+                        FAQReferenceLinkView(
+                            faqReferenceId: faqRefId,
+                            matchedQuestion: message.metadata?["matchedQuestion"],
+                            matchConfidence: message.metadata?["matchConfidence"],
+                            suggestedAnswer: message.metadata?["suggestedAnswer"],
+                            onTap: {
+                                onTapFAQReference?(faqRefId)
+                            }
+                        )
+                        .padding(.top, isFAQOnlyMessage ? 0 : 4)
+                        .frame(maxWidth: UIScreen.main.bounds.width * 0.7, alignment: bubbleAlignment)
+                    }
 
                     // Timestamp and status (only show if showTimestamp is true)
                     if showTimestamp {
@@ -110,13 +140,20 @@ struct MessageBubbleView: View {
     // MARK: - Computed Properties
 
     private var isAIMessage: Bool {
-        message.metadata?["ai_generated"] == "true"
+        message.metadata?["ai_generated"] == "true" ||
+        message.senderId == AIConstants.AI_USER_ID
+    }
+
+    /// Determines if this is a FAQ-only message (no text bubble should be shown)
+    private var isFAQOnlyMessage: Bool {
+        message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        message.metadata?["faqReference"] != nil
     }
 
     private var backgroundColor: Color {
         if isAIMessage {
-            // Distinct purple tint for AI messages
-            return Color(red: 0.75, green: 0.6, blue: 0.9, opacity: 0.2)
+            // Distinct purple tint for AI messages with enhanced visibility
+            return Color(red: 0.75, green: 0.6, blue: 0.9, opacity: 0.3)
         }
         return isFromCurrentUser ? .blue : Color(.systemGray5)
     }
