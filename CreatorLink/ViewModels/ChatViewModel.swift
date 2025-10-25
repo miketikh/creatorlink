@@ -65,6 +65,10 @@ class ChatViewModel {
             }
 
             messages = try await messageService.fetchMessages(conversationId: conversationId, userId: userId)
+
+            // Preload all participant profiles for typing indicators and message display
+            await preloadParticipantProfiles()
+
             isLoading = false
 
             // Set up real-time listeners
@@ -255,6 +259,22 @@ class ChatViewModel {
             return profile
         } catch {
             return nil
+        }
+    }
+
+    /// Preloads all participant profiles for the conversation
+    /// This ensures typing indicators and message displays have immediate access to user names
+    private func preloadParticipantProfiles() async {
+        // Fetch profiles for all participants in parallel
+        await withTaskGroup(of: Void.self) { group in
+            for userId in participantIds {
+                // Skip if already cached
+                guard senderProfiles[userId] == nil else { continue }
+
+                group.addTask { [weak self] in
+                    _ = await self?.fetchSenderProfile(userId: userId)
+                }
+            }
         }
     }
 
@@ -540,11 +560,12 @@ class ChatViewModel {
                 guard let self = self else { return }
                 self.typingUserIds = typingUserIds
 
-                // Fetch user names for typing users
+                // Fetch and cache user profiles for typing users
+                // This ensures getSenderName() will find them in the cache
                 var names: [String] = []
                 for userId in typingUserIds {
-                    if let user = try? await self.userService.fetchUser(userId: userId) {
-                        names.append(user.displayName)
+                    if let profile = await self.fetchSenderProfile(userId: userId) {
+                        names.append(profile.displayName)
                     }
                 }
                 self.typingUserNames = names

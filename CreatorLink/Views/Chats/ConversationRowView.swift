@@ -682,11 +682,10 @@ struct ConversationRowView: View {
                 // Update typing state - we only care if ANYONE else is typing
                 self.isOtherUserTyping = !typingUserIds.isEmpty
 
-                // For group chats, format the typing indicator with names
-                if self.conversation.isGroupChat && !typingUserIds.isEmpty {
+                // Fetch and format typing indicator with names for ALL chat types
+                if !typingUserIds.isEmpty {
                     await self.updateTypingIndicatorText(typingUserIds: typingUserIds, currentUserId: currentUserId)
                 } else {
-                    // For one-on-one chats, keep it simple
                     self.typingIndicatorText = ""
                 }
             }
@@ -706,6 +705,12 @@ struct ConversationRowView: View {
         // Fetch user profiles for typing users
         var displayNames: [String] = []
         for userId in otherTypingUsers {
+            // For one-on-one chats, use the already-loaded otherUser for optimization
+            if !self.conversation.isGroupChat, let otherUser = self.otherUser, userId == otherUser.id {
+                displayNames.append(otherUser.displayName)
+                continue
+            }
+
             // Check cache first
             if let cachedProfile = typingUserProfiles[userId] {
                 displayNames.append(cachedProfile.displayName)
@@ -716,14 +721,20 @@ struct ConversationRowView: View {
                     typingUserProfiles[userId] = profile
                     displayNames.append(profile.displayName)
                 } catch {
-                    // Silently fail - use fallback name
-                    displayNames.append("Someone")
+                    // If fetch fails, try again on next typing event
+                    // Skip this user for now rather than showing "Someone"
+                    continue
                 }
             }
         }
 
         // Format based on count
-        typingIndicatorText = formatTypingIndicatorText(displayNames: displayNames)
+        // If we couldn't fetch any names, show generic indicator while loading
+        if displayNames.isEmpty && !otherTypingUsers.isEmpty {
+            typingIndicatorText = "typing..."
+        } else {
+            typingIndicatorText = formatTypingIndicatorText(displayNames: displayNames)
+        }
     }
 
     /// Formats typing indicator text based on number of typers
