@@ -219,12 +219,14 @@ function calculatePrimaryCategory(
   if (existingCategory === newCategory.toString()) {
     logger.info("Category unchanged - matches existing", {
       category: existingCategory,
+      confidence: newConfidence,
     });
     return existingCategory;
   }
 
-  // If new confidence is very high (>0.85), switch to new category
-  if (newConfidence > 0.85) {
+  // If new confidence is high (>0.80), switch to new category
+  // Lowered from 0.85 to be more responsive to explicit category changes
+  if (newConfidence > 0.80) {
     logger.info("Switching category - high confidence", {
       from: existingCategory,
       to: newCategory,
@@ -238,6 +240,7 @@ function calculatePrimaryCategory(
     existing: existingCategory,
     suggested: newCategory,
     confidence: newConfidence,
+    threshold: 0.80,
   });
   return existingCategory;
 }

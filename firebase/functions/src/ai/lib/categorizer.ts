@@ -115,7 +115,11 @@ CATEGORIES (choose ONE):
 - Social: casual conversation, personal updates, friendly chats
 - Fan: fan messages, appreciation, content requests
 
-IMPORTANT: If an existing category is provided, keep it UNLESS there's very strong evidence the category should change (confidence > 0.9). Categories should be stable - don't switch based on a single message.
+CATEGORY UPDATE RULES:
+1. If the message EXPLICITLY states a category change (e.g., "we're no longer collaborating", "this is now business", "just social contact"), change the category immediately with high confidence (>0.85)
+2. If the conversation naturally shifts topics without explicit statements, require very strong evidence to change (confidence > 0.9) - maintain stability
+3. Look for clear relationship changes: "let's work together" → collaboration, "brand deal" → business, "just friends" → social
+4. If in doubt between keeping existing vs changing, favor the existing category for stability
 
 STATUS TAGS (assign to each participant based on their perspective):
 - "needsResponse": This person needs to reply to a question or request
