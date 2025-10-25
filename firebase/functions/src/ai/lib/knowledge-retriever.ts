@@ -1,0 +1,247 @@
+/**
+ * Knowledge Retrieval Service
+ * Performs semantic search on knowledge facts using Firestore native vector search.
+ *
+ * Uses Firestore's findNearest() method with:
+ * - COSINE distance measure (best for normalized embeddings)
+ * - Pre-filtering by userId
+ * - Automatic similarity-based sorting
+ */
+
+import * as admin from "firebase-admin";
+import * as logger from "firebase-functions/logger";
+import {KnowledgeFact} from "../types";
+import {generateEmbedding} from "./embedding-generator";
+
+// Minimum similarity threshold for results (0.7 = fairly relevant)
+const MIN_SIMILARITY_THRESHOLD = 0.7;
+
+/**
+ * Search for relevant knowledge facts using semantic vector search.
+ *
+ * @param queryText - The query text to search for
+ * @param userId - User ID to filter results to
+ * @param topK - Number of top results to return (default: 5)
+ * @returns Array of relevant facts, sorted by relevance (most relevant first)
+ */
+export async function searchKnowledge(
+  queryText: string,
+  userId: string,
+  topK: number = 5
+): Promise<KnowledgeFact[]> {
+  const startTime = Date.now();
+
+  try {
+    logger.info("Starting knowledge search", {
+      queryLength: queryText.length,
+      userId,
+      topK,
+    });
+
+    // Generate embedding for query text
+    const queryEmbedding = await generateEmbedding(queryText);
+
+    const db = admin.firestore();
+
+    // Use Firestore native vector search
+    // Note: findNearest() is the method for vector search in Firestore
+    const results = await db.collection("knowledge")
+      .where("userId", "==", userId)
+      .findNearest({
+        vectorField: "embedding",
+        queryVector: admin.firestore.FieldValue.vector(queryEmbedding),
+        limit: topK,
+        distanceMeasure: "COSINE",
+      })
+      .get();
+
+    if (results.empty) {
+      logger.info("No knowledge facts found", {
+        userId,
+        queryText: queryText.substring(0, 50),
+      });
+      return [];
+    }
+
+    // Convert results to KnowledgeFact format
+    const facts: KnowledgeFact[] = results.docs.map(doc => {
+      const data = doc.data();
+
+      // Extract embedding array
+      let embedding: number[];
+      if (data.embedding && typeof data.embedding.toArray === 'function') {
+        embedding = data.embedding.toArray();
+      } else if (Array.isArray(data.embedding)) {
+        embedding = data.embedding;
+      } else {
+        embedding = [];
+      }
+
+      return {
+        id: doc.id,
+        userId: data.userId,
+        text: data.text,
+        embedding,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        updatedAt: data.updatedAt?.toDate() || new Date(),
+      };
+    });
+
+    // Optional: Filter by minimum similarity threshold
+    // Note: Firestore returns results sorted by similarity, but doesn't expose the similarity score
+    // For now, we trust that findNearest returns relevant results
+    // If we need explicit similarity scores, we'd need to calculate them manually
+
+    const duration = Date.now() - startTime;
+    logger.info("Knowledge search complete", {
+      userId,
+      resultsFound: facts.length,
+      durationMs: duration,
+    });
+
+    if (facts.length > 0) {
+      logger.info("Top search results:", {
+        facts: facts.map(f => ({
+          id: f.id,
+          text: f.text.substring(0, 50),
+        })),
+      });
+    }
+
+    return facts;
+
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logger.error("Knowledge search failed", {
+      userId,
+      queryText: queryText.substring(0, 50),
+      error: error instanceof Error ? error.message : String(error),
+      durationMs: duration,
+    });
+
+    // Return empty array on error (graceful degradation)
+    return [];
+  }
+}
+
+/**
+ * Search for knowledge facts and return with similarity scores.
+ * This is a helper that manually calculates cosine similarity for each result.
+ *
+ * @param queryText - The query text to search for
+ * @param userId - User ID to filter results to
+ * @param topK - Number of top results to return (default: 5)
+ * @returns Array of facts with similarity scores
+ */
+export async function searchKnowledgeWithScores(
+  queryText: string,
+  userId: string,
+  topK: number = 5
+): Promise<Array<{fact: KnowledgeFact; similarity: number}>> {
+  try {
+    logger.info("Starting knowledge search with scores", {
+      queryLength: queryText.length,
+      userId,
+      topK,
+    });
+
+    // Generate embedding for query
+    const queryEmbedding = await generateEmbedding(queryText);
+
+    // Get all facts for user (we'll calculate similarity manually)
+    const db = admin.firestore();
+    const snapshot = await db.collection("knowledge")
+      .where("userId", "==", userId)
+      .get();
+
+    if (snapshot.empty) {
+      logger.info("No knowledge facts found for user", {userId});
+      return [];
+    }
+
+    // Calculate similarity for each fact
+    const resultsWithScores: Array<{fact: KnowledgeFact; similarity: number}> = [];
+
+    for (const doc of snapshot.docs) {
+      const data = doc.data();
+
+      // Extract embedding
+      let embedding: number[];
+      if (data.embedding && typeof data.embedding.toArray === 'function') {
+        embedding = data.embedding.toArray();
+      } else if (Array.isArray(data.embedding)) {
+        embedding = data.embedding;
+      } else {
+        continue; // Skip facts without valid embeddings
+      }
+
+      // Calculate cosine similarity
+      const similarity = cosineSimilarity(queryEmbedding, embedding);
+
+      // Only include if above threshold
+      if (similarity >= MIN_SIMILARITY_THRESHOLD) {
+        resultsWithScores.push({
+          fact: {
+            id: doc.id,
+            userId: data.userId,
+            text: data.text,
+            embedding,
+            createdAt: data.createdAt?.toDate() || new Date(),
+            updatedAt: data.updatedAt?.toDate() || new Date(),
+          },
+          similarity,
+        });
+      }
+    }
+
+    // Sort by similarity (highest first)
+    resultsWithScores.sort((a, b) => b.similarity - a.similarity);
+
+    // Take top K
+    const topResults = resultsWithScores.slice(0, topK);
+
+    logger.info("Knowledge search with scores complete", {
+      userId,
+      totalFacts: snapshot.size,
+      aboveThreshold: resultsWithScores.length,
+      returned: topResults.length,
+    });
+
+    return topResults;
+
+  } catch (error) {
+    logger.error("Knowledge search with scores failed", {
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return [];
+  }
+}
+
+/**
+ * Calculate cosine similarity between two vectors.
+ * Copied from embedding-generator for convenience.
+ */
+function cosineSimilarity(vec1: number[], vec2: number[]): number {
+  if (vec1.length !== vec2.length) {
+    return 0;
+  }
+
+  let dotProduct = 0;
+  let norm1 = 0;
+  let norm2 = 0;
+
+  for (let i = 0; i < vec1.length; i++) {
+    dotProduct += vec1[i] * vec2[i];
+    norm1 += vec1[i] * vec1[i];
+    norm2 += vec2[i] * vec2[i];
+  }
+
+  const magnitude = Math.sqrt(norm1) * Math.sqrt(norm2);
+
+  if (magnitude === 0) {
+    return 0;
+  }
+
+  return dotProduct / magnitude;
+}

@@ -11,6 +11,10 @@ export {writeAIResponse} from "./lib/response-writer";
 export {categorizeConversation} from "./lib/categorizer";
 export {fetchConversationContext, shouldAnalyzeMessage} from "./lib/conversation-context";
 export {updateConversationTags} from "./lib/tag-writer";
+export {extractKnowledge} from "./lib/knowledge-extractor";
+export {generateEmbedding, generateEmbeddingsBatch, cosineSimilarity} from "./lib/embedding-generator";
+export {storeKnowledgeFact, getKnowledgeByUserId} from "./lib/knowledge-store";
+export {searchKnowledge, searchKnowledgeWithScores} from "./lib/knowledge-retriever";
 export {
   getCachedResult,
   setCachedResult,
@@ -30,6 +34,8 @@ export type {
   StatusDetectionResult,
   CategorizationResult,
   TagUpdatePayload,
+  KnowledgeFact,
+  KnowledgeExtractionResult,
 } from "./types";
 export type {ConversationMessage} from "./lib/message-fetcher";
 export type {FAQMatch} from "./lib/faq-matcher";

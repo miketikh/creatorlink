@@ -17,6 +17,8 @@ import {
   fetchConversationContext,
   shouldAnalyzeMessage,
   updateConversationTags,
+  extractKnowledge,
+  storeKnowledgeFact,
 } from "./ai";
 
 // Initialize Firebase Admin SDK
@@ -302,6 +304,137 @@ export const onMessageCreated = onDocumentCreated(
         error: error instanceof Error ? error.message : String(error),
       });
       // Don't throw - categorization errors shouldn't fail the entire function
+    }
+
+    // PHASE 1: Knowledge Extraction - Extract facts from user messages
+    try {
+      // Check feature flag (default enabled)
+      const knowledgeExtractionEnabled = process.env.ENABLE_KNOWLEDGE_EXTRACTION !== "false";
+
+      if (!knowledgeExtractionEnabled) {
+        logger.info("Knowledge extraction disabled by feature flag", {
+          conversationId,
+        });
+        return null;
+      }
+
+      // Skip if message from AI user
+      if (messageData?.senderId === AI_USER_ID) {
+        logger.info("Skipping knowledge extraction for AI message", {
+          messageId,
+        });
+        return null;
+      }
+
+      // Skip if message from system
+      if (messageData?.senderId === "system") {
+        logger.info("Skipping knowledge extraction for system message", {
+          messageId,
+        });
+        return null;
+      }
+
+      // Skip if message is a question (we want statements with facts)
+      if (messageText.trim()) {
+        const questionResult = await detectIfQuestion(messageText);
+        if (questionResult.isQuestion) {
+          logger.info("Skipping knowledge extraction for question", {
+            messageId,
+            confidence: questionResult.confidence,
+          });
+          return null;
+        }
+      }
+
+      logger.info("Starting knowledge extraction", {
+        conversationId,
+        messageId,
+        senderId: messageData?.senderId,
+      });
+
+      // Fetch last 5 messages for context
+      const recentMessages = await fetchConversationMessages(conversationId, 5);
+
+      if (recentMessages.length === 0) {
+        logger.info("No conversation history for context, skipping knowledge extraction", {
+          conversationId,
+        });
+        return null;
+      }
+
+      // Extract knowledge from message with context
+      const extractionResult = await extractKnowledge(
+        messageText,
+        recentMessages,
+        messageData?.senderId
+      );
+
+      if (!extractionResult.success) {
+        logger.warn("Knowledge extraction failed", {
+          conversationId,
+          messageId,
+          error: extractionResult.error,
+        });
+        return null;
+      }
+
+      if (extractionResult.facts.length === 0) {
+        logger.info("No facts extracted from message", {
+          conversationId,
+          messageId,
+        });
+        return null;
+      }
+
+      logger.info("Facts extracted, storing to Firestore", {
+        conversationId,
+        messageId,
+        factCount: extractionResult.facts.length,
+      });
+
+      // Store each extracted fact
+      let storedCount = 0;
+      let skippedCount = 0;
+
+      for (const fact of extractionResult.facts) {
+        try {
+          const factId = await storeKnowledgeFact(fact);
+
+          if (factId) {
+            storedCount++;
+            logger.info("Fact stored", {
+              factId,
+              text: fact.text,
+            });
+          } else {
+            skippedCount++;
+            logger.info("Fact skipped (duplicate)", {
+              text: fact.text,
+            });
+          }
+        } catch (error) {
+          logger.error("Failed to store fact", {
+            text: fact.text,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      logger.info("✅ Knowledge extraction complete", {
+        conversationId,
+        messageId,
+        extracted: extractionResult.facts.length,
+        stored: storedCount,
+        skipped: skippedCount,
+      });
+
+    } catch (error) {
+      logger.error("Error during knowledge extraction", {
+        conversationId,
+        messageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't throw - knowledge extraction errors shouldn't fail the entire function
     }
 
     return null;

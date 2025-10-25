@@ -412,6 +412,70 @@ When `metadata` is present on AI-generated messages, it may contain the followin
 
 ---
 
+### Collection: `knowledge`
+
+**TypeScript Model:** `KnowledgeFact` (firebase/functions/src/ai/types.ts)
+
+**Purpose:** Stores extracted factual information from user messages with vector embeddings for semantic search.
+
+#### Fields
+
+- `id: string` - Firestore document ID (auto-generated)
+- `userId: string` - ID of the user this knowledge belongs to
+- `text: string` - Normalized, self-contained fact text (e.g., "User has a dog named Max")
+- `embedding: number[]` - Vector representation for semantic search (1536 dimensions from OpenAI text-embedding-3-small model)
+- `createdAt: Date` - Timestamp when the fact was created (stored as Firestore Timestamp)
+- `updatedAt: Date` - Timestamp when the fact was last updated (stored as Firestore Timestamp)
+
+#### Relationships
+
+- References: `userId` → `users.id`
+
+#### Example Document
+
+```json
+{
+  "id": "fact123",
+  "userId": "user456",
+  "text": "User charges $500/hour for consulting",
+  "embedding": [0.123, -0.456, 0.789, ...], // 1536-dimensional vector
+  "createdAt": {
+    "_seconds": 1729699200,
+    "_nanoseconds": 0
+  },
+  "updatedAt": {
+    "_seconds": 1729699200,
+    "_nanoseconds": 0
+  }
+}
+```
+
+#### Notes
+
+- **Minimal schema**: Only essential fields (userId, text, embedding, timestamps)
+- **Normalized facts**: Text field stores complete, self-contained sentences that make sense without conversation context
+  - Example: "Yes" + context → "User has one dog"
+  - Example: "Max" + context ("dog's name?") → "User's dog is named Max"
+- **Vector embeddings**: Enable semantic search for relevant knowledge retrieval
+  - Uses OpenAI text-embedding-3-small model (1536 dimensions)
+  - Stored using `FieldValue.vector()` for Firestore native vector search
+- **Deduplication**: Vector similarity (>0.95) used to prevent duplicate facts
+- **Security**: Users can only read/write their own knowledge facts
+- **Indexing**: Composite index on `userId` for efficient queries
+  - Index: `userId` (ascending) + `createdAt` (descending)
+
+#### Security Rules Requirements
+
+```javascript
+// Users can only access their own knowledge facts
+match /knowledge/{factId} {
+  allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+  allow write: if request.auth != null && request.auth.uid == request.resource.data.userId;
+}
+```
+
+---
+
 ## Firebase Realtime Database
 
 ### RTDB: `presence`

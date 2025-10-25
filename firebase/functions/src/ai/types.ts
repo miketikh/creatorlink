@@ -96,6 +96,28 @@ export function isStatusValid(status: string): status is StatusTag {
   return Object.values(StatusTag).includes(status as StatusTag);
 }
 
+/**
+ * Knowledge fact with vector embedding for semantic search.
+ * Used to store factual information extracted from user messages.
+ */
+export interface KnowledgeFact {
+  id: string; // Firestore document ID
+  userId: string; // Owner of this knowledge
+  text: string; // Normalized, self-contained fact (e.g., "User has a dog named Max")
+  embedding: number[]; // Vector representation (1536 dimensions from OpenAI text-embedding-3-small)
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Result from knowledge extraction operation.
+ */
+export interface KnowledgeExtractionResult {
+  success: boolean;
+  facts: KnowledgeFact[];
+  error?: string;
+}
+
 // Add more types here as we expand AI functionality
 // Example future types:
 // - ContextDetectionResult
