@@ -98,13 +98,14 @@ IMPORTANT: If an existing category is provided, keep it UNLESS there's very stro
 STATUS TAGS (assign to each participant based on their perspective):
 - "needsResponse": This person needs to reply to a question or request
 - "awaitingReply": This person is waiting for someone else to respond
-- "urgent": This person should see this as time-sensitive (keywords: ASAP, urgent, deadline, EOD, tonight)
+- "urgent": This person needs to respond quickly - immediate plans, time-sensitive questions, things happening soon (next hour or so)/now, or explicit urgency.  
 
 IMPORTANT - Status Tag Rules:
 - Only include participants whose tags should change
 - Use empty array [] to clear all tags for that participant
 - Omit participant ID if their tags should remain unchanged
 - Analyze the status changes from both participants (ie. if someone was waiting for a reply then responded with a question, it should update statuses for both participants)
+- Update contextually! If a message says "urgent," and the person responds to it, it should no longer be urgent for that person.
 
 Examples:
 
@@ -119,16 +120,16 @@ Bob asks Alice: "What are you doing later?"
 Alice answers: "Going to the gym"
 {
   "statusTagsByUser": {
-    "bob123": [],      // Clear Bob's tags (question answered)
-    "alice456": []     // Clear Alice's tags (conversation resolved)
+    "bob123": [],
+    "alice456": []
   }
 }
 
-Bob asks again: "Want to join?"
+Bob: "Are you coming? We're about to leave"
 {
   "statusTagsByUser": {
     "bob123": ["awaitingReply"],
-    "alice456": ["needsResponse"]
+    "alice456": ["urgent", "needsResponse"]  // Immediate situation, needs quick response
   }
 }
 

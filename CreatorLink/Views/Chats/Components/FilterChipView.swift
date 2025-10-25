@@ -13,6 +13,7 @@ struct FilterChipView: View {
     let count: Int?
     let isSelected: Bool
     let onTap: () -> Void
+    var isCompact: Bool = false
 
     var body: some View {
         chipButton
@@ -29,20 +30,20 @@ struct FilterChipView: View {
     }
 
     private var chipContent: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: isCompact ? 4 : 6) {
             if let emoji = emoji {
                 Text(emoji)
-                    .font(.system(size: 16))
+                    .font(.system(size: isCompact ? 14 : 16))
             }
             Text(label)
-                .font(.subheadline)
+                .font(isCompact ? .caption : .subheadline)
                 .fontWeight(.medium)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, isCompact ? 10 : 12)
+        .padding(.vertical, isCompact ? 6 : 10)
         .background(isSelected ? Color.blue : Color.gray.opacity(0.2))
         .foregroundColor(isSelected ? .white : .primary)
-        .cornerRadius(20)
+        .cornerRadius(isCompact ? 16 : 20)
         .overlay(countBadge, alignment: .topTrailing)
     }
 

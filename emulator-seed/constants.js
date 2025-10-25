@@ -20,19 +20,27 @@ const PRIMARY_USERS = [
   {
     displayName: 'Alice Johnson',
     email: 'alice.johnson@test.com',
-    // Special photo for Alice (real image)
-    photoURL: 'https://images.unsplash.com/photo-1574158622682-e40e69881006?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&q=80&w=1480'
+    photoURL: 'https://images.unsplash.com/photo-1592621385612-4d7129426394?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MXx8d29tYW58ZW58MHx8MHx8fDI%3D&auto=format&fit=crop&q=60&w=500'
   },
   {
     displayName: 'Bob Martinez',
-    email: 'bob.martinez@test.com'
+    email: 'bob.martinez@test.com',
+    photoURL: 'https://images.unsplash.com/photo-1480429370139-e0132c086e2a?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8OHx8bWFufGVufDB8fDB8fHwy&auto=format&fit=crop&q=60&w=500'
   }
 ];
 
 // Additional test users (consistent across all seeds)
 const ADDITIONAL_USERS = [
-  { displayName: 'Carol Williams', email: 'carol.williams@test.com' },
-  { displayName: 'David Chen', email: 'david.chen@test.com' },
+  {
+    displayName: 'Carol Williams',
+    email: 'carol.williams@test.com',
+    photoURL: 'https://images.unsplash.com/photo-1614786269829-d24616faf56d?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MXx8YnVzaW5lc3N3b21hbnxlbnwwfHwwfHx8Mg%3D%3D&auto=format&fit=crop&q=60&w=500'
+  },
+  {
+    displayName: 'David Chen',
+    email: 'david.chen@test.com',
+    photoURL: 'https://images.unsplash.com/photo-1603574670812-d24560880210?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8N3x8cGhvdG9ncmFwaGVyfGVufDB8fDB8fHwy&auto=format&fit=crop&q=60&w=500'
+  },
   { displayName: 'Emma Davis', email: 'emma.davis@test.com' },
   { displayName: 'Frank Garcia', email: 'frank.garcia@test.com' },
   { displayName: 'Grace Kim', email: 'grace.kim@test.com' },

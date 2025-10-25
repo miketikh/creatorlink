@@ -19,24 +19,17 @@ struct ChatsView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                // Filter bar (only show when conversations exist)
-                if !viewModel.conversations.isEmpty {
-                    FilterBarView(viewModel: viewModel)
-                }
-
-                // Main content
-                Group {
-                    if viewModel.isLoading {
-                        ProgressView("Loading conversations...")
-                    } else if viewModel.conversations.isEmpty {
-                        emptyStateView
-                    } else {
-                        conversationListView
-                    }
+            Group {
+                if viewModel.isLoading {
+                    ProgressView("Loading conversations...")
+                } else if viewModel.conversations.isEmpty {
+                    emptyStateView
+                } else {
+                    conversationListView
                 }
             }
             .navigationTitle("Chats")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Menu {
@@ -210,6 +203,10 @@ struct ChatsView: View {
             }
         }
         .listStyle(.plain)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            FilterBarView(viewModel: viewModel)
+                .background(Color(uiColor: .systemBackground))
+        }
         .animation(.easeInOut, value: viewModel.selectedCategoryFilters)
         .animation(.easeInOut, value: viewModel.selectedStatusFilters)
     }

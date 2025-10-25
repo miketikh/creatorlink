@@ -21,17 +21,18 @@ struct ConversationTagsView: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            ForEach(displayedBadges.indices, id: \.self) { index in
-                let badge = displayedBadges[index]
+            // Show category badge first (if exists) - larger
+            if let categoryBadge = categoryBadge {
                 ZStack(alignment: .topTrailing) {
                     TagBadgeView(
-                        emoji: badge.emoji,
-                        backgroundColor: badge.backgroundColor,
-                        accessibilityLabel: badge.accessibilityLabel
+                        emoji: categoryBadge.emoji,
+                        backgroundColor: categoryBadge.backgroundColor,
+                        accessibilityLabel: categoryBadge.accessibilityLabel,
+                        size: 28
                     )
 
-                    // Show AI/USER badge on first badge only
-                    if index == 0, let indicator = tagIndicator {
+                    // Show AI/USER badge on category badge
+                    if let indicator = tagIndicator {
                         Text(indicator.text)
                             .font(.system(size: 8, weight: .bold))
                             .foregroundColor(.white)
@@ -39,9 +40,20 @@ struct ConversationTagsView: View {
                             .frame(width: 12, height: 12)
                             .background(indicator.color)
                             .clipShape(Circle())
-                            .offset(x: 4, y: -4)
+                            .offset(x: 5, y: -5)
                     }
                 }
+            }
+
+            // Show status badges second - smaller
+            ForEach(statusBadges.indices, id: \.self) { index in
+                let badge = statusBadges[index]
+                TagBadgeView(
+                    emoji: badge.emoji,
+                    backgroundColor: badge.backgroundColor,
+                    accessibilityLabel: badge.accessibilityLabel,
+                    size: 20
+                )
             }
         }
     }
@@ -81,10 +93,24 @@ struct ConversationTagsView: View {
         return nil
     }
 
-    private var displayedBadges: [BadgeInfo] {
-        var badges: [BadgeInfo] = []
+    /// Category badge - shown first and larger
+    private var categoryBadge: BadgeInfo? {
+        let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
 
-        // Get effective tags for this user
+        guard !userTags.categories.isEmpty else { return nil }
+
+        let firstCategory = userTags.categories[0]
+        return BadgeInfo(
+            emoji: firstCategory.emoji,
+            backgroundColor: .clear,
+            priority: 1,
+            accessibilityLabel: "\(firstCategory.displayName) category"
+        )
+    }
+
+    /// Status badges - shown after category, smaller
+    private var statusBadges: [BadgeInfo] {
+        var badges: [BadgeInfo] = []
         let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
 
         // Priority 1: Urgent (highest priority)
@@ -127,20 +153,8 @@ struct ConversationTagsView: View {
             ))
         }
 
-        // Priority 5: User's category tags (if space allows and not already at max)
-        if badges.count < 3, !userTags.categories.isEmpty {
-            // Use user's first category tag
-            let firstCategory = userTags.categories[0]
-            badges.append(BadgeInfo(
-                emoji: firstCategory.emoji,
-                backgroundColor: .clear,
-                priority: 5,
-                accessibilityLabel: "\(firstCategory.displayName) category"
-            ))
-        }
-
-        // Limit to max 3 badges (already sorted by priority)
-        return Array(badges.prefix(3))
+        // Limit to max 2 status badges (to keep display clean)
+        return Array(badges.prefix(2))
     }
 }
 

@@ -49,15 +49,42 @@ struct ConversationRowView: View {
 
             // Conversation info
             VStack(alignment: .leading, spacing: 4) {
-                Text(displayName)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                    .fontWeight(unreadCount > 0 ? .bold : .semibold)
+                // Name with category icon before and status icon after
+                HStack(spacing: 6) {
+                    // Category icon (left of name)
+                    if let currentUserId = viewModel.currentUserId,
+                       let categoryBadge = getCategoryBadge(userId: currentUserId) {
+                        TagBadgeView(
+                            emoji: categoryBadge.emoji,
+                            backgroundColor: categoryBadge.backgroundColor,
+                            accessibilityLabel: categoryBadge.accessibilityLabel,
+                            size: 20
+                        )
+                    }
 
-                // Tag badges (if any tags exist for current user)
-                if let currentUserId = viewModel.currentUserId, hasAnyTags {
-                    ConversationTagsView(conversation: conversation, userId: currentUserId)
-                        .id(conversation.tagsByUser?[currentUserId]) // Force re-render when tags change
+                    // Name
+                    Text(displayName)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                        .fontWeight(unreadCount > 0 ? .bold : .semibold)
+
+                    // Status icons (right of name) with separator
+                    if let currentUserId = viewModel.currentUserId,
+                       let statusBadges = getStatusBadges(userId: currentUserId),
+                       !statusBadges.isEmpty {
+                        Text("|")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+
+                        ForEach(statusBadges.indices, id: \.self) { index in
+                            TagBadgeView(
+                                emoji: statusBadges[index].emoji,
+                                backgroundColor: statusBadges[index].backgroundColor,
+                                accessibilityLabel: statusBadges[index].accessibilityLabel,
+                                size: 18
+                            )
+                        }
+                    }
                 }
 
                 // Show typing indicator or last message
@@ -317,6 +344,70 @@ struct ConversationRowView: View {
         guard let userId = viewModel.currentUserId else { return false }
         let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
         return tags.statuses.contains(.urgent)
+    }
+
+    // Badge info structure for inline display
+    private struct BadgeInfo {
+        let emoji: String
+        let backgroundColor: Color
+        let accessibilityLabel: String
+    }
+
+    /// Get category badge for inline display (first category only)
+    private func getCategoryBadge(userId: String) -> BadgeInfo? {
+        let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
+        guard !tags.categories.isEmpty else { return nil }
+
+        let category = tags.categories[0]
+        return BadgeInfo(
+            emoji: category.emoji,
+            backgroundColor: .clear,
+            accessibilityLabel: "\(category.displayName) category"
+        )
+    }
+
+    /// Get status badges for inline display
+    private func getStatusBadges(userId: String) -> [BadgeInfo]? {
+        let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
+        guard !tags.statuses.isEmpty else { return nil }
+
+        var badges: [BadgeInfo] = []
+
+        // Priority order: urgent, needsResponse, awaitingReply, resolved
+        if tags.statuses.contains(.urgent) {
+            badges.append(BadgeInfo(
+                emoji: StatusTag.urgent.emoji,
+                backgroundColor: Color.red.opacity(0.1),
+                accessibilityLabel: "Urgent status"
+            ))
+        }
+
+        if tags.statuses.contains(.needsResponse) {
+            badges.append(BadgeInfo(
+                emoji: StatusTag.needsResponse.emoji,
+                backgroundColor: .clear,
+                accessibilityLabel: "Needs response status"
+            ))
+        }
+
+        if tags.statuses.contains(.awaitingReply) {
+            badges.append(BadgeInfo(
+                emoji: StatusTag.awaitingReply.emoji,
+                backgroundColor: .clear,
+                accessibilityLabel: "Awaiting reply status"
+            ))
+        }
+
+        if tags.statuses.contains(.resolved) {
+            badges.append(BadgeInfo(
+                emoji: StatusTag.resolved.emoji,
+                backgroundColor: .clear,
+                accessibilityLabel: "Resolved status"
+            ))
+        }
+
+        // Limit to max 2 status badges
+        return badges.isEmpty ? nil : Array(badges.prefix(2))
     }
 
     // MARK: - Tag Actions

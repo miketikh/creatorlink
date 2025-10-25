@@ -144,13 +144,21 @@ struct ChatDetailView: View {
 
                     // Name, status/participant count, and tags
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(navigationTitle)
-                            .font(.headline)
+                        // Name with category icon after (no status icons)
+                        HStack(spacing: 4) {
+                            Text(navigationTitle)
+                                .font(.headline)
 
-                        // Tag badges (if any tags exist for current user)
-                        if let currentUserId = AuthService.shared.currentUser?.uid, hasAnyTags {
-                            ConversationTagsView(conversation: conversation, userId: currentUserId)
-                                .id(conversation.tagsByUser?[currentUserId]) // Force re-render when tags change
+                            // Category icon only (no status icons)
+                            if let currentUserId = AuthService.shared.currentUser?.uid,
+                               let categoryBadge = getCategoryBadge(userId: currentUserId) {
+                                TagBadgeView(
+                                    emoji: categoryBadge.emoji,
+                                    backgroundColor: categoryBadge.backgroundColor,
+                                    accessibilityLabel: categoryBadge.accessibilityLabel,
+                                    size: 16
+                                )
+                            }
                         }
 
                         if conversation.isGroupChat {
@@ -568,6 +576,26 @@ struct ChatDetailView: View {
         guard let userId = AuthService.shared.currentUser?.uid else { return false }
         let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
         return !tags.categories.isEmpty || !tags.statuses.isEmpty
+    }
+
+    // Badge info structure for header display
+    private struct BadgeInfo {
+        let emoji: String
+        let backgroundColor: Color
+        let accessibilityLabel: String
+    }
+
+    /// Get category badge for header display (first category only, no status badges)
+    private func getCategoryBadge(userId: String) -> BadgeInfo? {
+        let tags = TaggingService.shared.getEffectiveTags(conversation: conversation, userId: userId)
+        guard !tags.categories.isEmpty else { return nil }
+
+        let category = tags.categories[0]
+        return BadgeInfo(
+            emoji: category.emoji,
+            backgroundColor: .clear,
+            accessibilityLabel: "\(category.displayName) category"
+        )
     }
 
     // MARK: - Helper Methods for Timestamp Grouping

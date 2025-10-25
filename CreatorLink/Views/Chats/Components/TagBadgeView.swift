@@ -11,17 +11,19 @@ struct TagBadgeView: View {
     let emoji: String
     let backgroundColor: Color
     let accessibilityLabel: String?
+    var size: CGFloat = 24
 
-    init(emoji: String, backgroundColor: Color = .clear, accessibilityLabel: String? = nil) {
+    init(emoji: String, backgroundColor: Color = .clear, accessibilityLabel: String? = nil, size: CGFloat = 24) {
         self.emoji = emoji
         self.backgroundColor = backgroundColor
         self.accessibilityLabel = accessibilityLabel
+        self.size = size
     }
 
     var body: some View {
         Text(emoji)
-            .font(.system(size: 14))
-            .frame(width: 24, height: 24)
+            .font(.system(size: size * 0.6))
+            .frame(width: size, height: size)
             .background(backgroundColor)
             .clipShape(Circle())
             .accessibilityLabel(accessibilityLabel ?? emoji)

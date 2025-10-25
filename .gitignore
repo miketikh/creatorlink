@@ -163,6 +163,10 @@ Temporary Items
 firebase-debug.log
 firestore-debug.log
 database-debug.log
+firebase-debug.*.log
+
+# Firebase Emulator exported data
+firebase/emulator-data/
 
 # Firebase Emulator seed script (Node.js dependencies)
 emulator-seed/node_modules/
