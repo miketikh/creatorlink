@@ -23,10 +23,17 @@ class ChatViewModel {
     var isViewActive = false  // Track if chat view is currently visible
     var senderProfiles: [String: UserProfile] = [:]  // Cache for sender profiles
 
+    // Draft state properties
+    var currentDraft: MessageDraft?
+    var isDraftLoaded: Bool = false
+    var draftWasTouched: Bool = false
+    private var draftListener: ListenerRegistration?
+
     private let messageService = MessageService.shared
     private let conversationService = ConversationService.shared
     private let userService = UserService.shared
     private let typingService = TypingService.shared
+    private let draftService = DraftService.shared
     private var messagesListener: ListenerRegistration?
     private var conversationListener: ListenerRegistration?
     private var typingListener: DatabaseHandle?
@@ -75,6 +82,10 @@ class ChatViewModel {
             setupMessageListener()
             setupConversationListener()
             setupTypingListener()
+
+            // Load draft for this conversation
+            await loadDraft()
+            setupDraftListener()
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
@@ -140,6 +151,22 @@ class ChatViewModel {
                 timestamp: sentMessage.timestamp,
                 senderId: currentUserId
             )
+
+            // Delete draft if one exists (user has responded)
+            if currentDraft != nil {
+                do {
+                    try await draftService.deleteDraft(
+                        conversationId: conversationId,
+                        userId: currentUserId
+                    )
+                    currentDraft = nil
+                    draftWasTouched = false
+                    isDraftLoaded = false
+                } catch {
+                    // Silently fail - draft deletion is non-critical
+                    print("Failed to delete draft after sending: \(error)")
+                }
+            }
 
             isSending = false
         } catch {
@@ -573,6 +600,96 @@ class ChatViewModel {
         }
     }
 
+    // MARK: - Draft Management
+
+    /// Loads draft for this conversation
+    func loadDraft() async {
+        guard let userId = currentUserId else { return }
+
+        do {
+            currentDraft = try await draftService.fetchDraft(
+                conversationId: conversationId,
+                userId: userId
+            )
+            isDraftLoaded = true
+        } catch {
+            // Log error for debugging (helps catch permission issues)
+            print("⚠️ Failed to load draft: \(error.localizedDescription)")
+            currentDraft = nil
+            isDraftLoaded = true
+        }
+    }
+
+    /// Sets up real-time listener for draft updates
+    func setupDraftListener() {
+        guard let userId = currentUserId else { return }
+
+        // Remove existing listener if any
+        removeDraftListener()
+
+        draftListener = draftService.listenToDraft(
+            conversationId: conversationId,
+            userId: userId
+        ) { [weak self] draft in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                self.currentDraft = draft
+            }
+        }
+    }
+
+    /// Removes draft listener
+    func removeDraftListener() {
+        draftListener?.remove()
+        draftListener = nil
+    }
+
+    /// Called when user modifies the draft text
+    /// - Parameter newText: The new text in the input field
+    func onDraftTextChanged(newText: String) {
+        guard let draft = currentDraft,
+              let userId = currentUserId else { return }
+
+        // Check if text differs from draft
+        if newText != draft.text && !draftWasTouched {
+            draftWasTouched = true
+
+            // Mark draft as touched in Firestore (prevents Cloud Functions from overwriting)
+            Task {
+                do {
+                    try await draftService.markDraftTouched(
+                        conversationId: conversationId,
+                        userId: userId
+                    )
+                } catch {
+                    // Silently fail - userTouched flag is defensive, not critical
+                    print("Failed to mark draft as touched: \(error)")
+                }
+            }
+        }
+    }
+
+    /// Dismisses the current draft
+    func dismissDraft() async {
+        guard let userId = currentUserId else { return }
+
+        // Clear draft from view model
+        currentDraft = nil
+        draftWasTouched = false
+        isDraftLoaded = false
+
+        // Delete from Firestore
+        do {
+            try await draftService.deleteDraft(
+                conversationId: conversationId,
+                userId: userId
+            )
+        } catch {
+            // Silently fail - draft deletion is non-critical
+            print("Failed to delete draft: \(error)")
+        }
+    }
+
     func cleanup() {
         messagesListener?.remove()
         messagesListener = nil
@@ -591,5 +708,8 @@ class ChatViewModel {
         if let currentUserId = currentUserId {
             typingService.clearTyping(conversationId: conversationId, userId: currentUserId)
         }
+
+        // Remove draft listener
+        removeDraftListener()
     }
 }

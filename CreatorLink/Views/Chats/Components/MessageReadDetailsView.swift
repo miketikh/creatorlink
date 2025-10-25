@@ -265,7 +265,8 @@ struct ParticipantStatusRow: View {
                 email: "alice@example.com",
                 photoURL: nil,
                 isOnline: true,
-                lastSeen: Date()
+                lastSeen: Date(),
+                aiResponseModeEnabled: nil
             ),
             UserProfile(
                 id: "user3",
@@ -273,7 +274,8 @@ struct ParticipantStatusRow: View {
                 email: "bob@example.com",
                 photoURL: nil,
                 isOnline: false,
-                lastSeen: Date().addingTimeInterval(-3600)
+                lastSeen: Date().addingTimeInterval(-3600),
+                aiResponseModeEnabled: nil
             )
         ]
     )

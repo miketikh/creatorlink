@@ -49,7 +49,8 @@ class UserService {
             email: data["email"] as? String ?? "",
             photoURL: data["photoURL"] as? String,
             isOnline: data["isOnline"] as? Bool ?? false,
-            lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date()
+            lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date(),
+            aiResponseModeEnabled: data["aiResponseModeEnabled"] as? Bool
         )
     }
 
@@ -82,7 +83,8 @@ class UserService {
                 email: data["email"] as? String ?? "",
                 photoURL: data["photoURL"] as? String,
                 isOnline: data["isOnline"] as? Bool ?? false,
-                lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date()
+                lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date(),
+                aiResponseModeEnabled: data["aiResponseModeEnabled"] as? Bool
             )
             users.append(user)
         }
@@ -129,6 +131,18 @@ class UserService {
             ])
     }
 
+    func updateAIResponseMode(userId: String, enabled: Bool) async throws {
+        do {
+            try await firestoreService.usersCollection
+                .document(userId)
+                .updateData([
+                    "aiResponseModeEnabled": enabled
+                ])
+        } catch {
+            throw UserServiceError.updateFailed(error)
+        }
+    }
+
     var currentUserId: String? {
         return AuthService.shared.currentUser?.uid
     }
@@ -141,6 +155,7 @@ enum UserServiceError: LocalizedError {
     case emptyDisplayName
     case displayNameTooLong
     case invalidPhotoURL
+    case updateFailed(Error)
 
     var errorDescription: String? {
         switch self {
@@ -152,6 +167,8 @@ enum UserServiceError: LocalizedError {
             return "Display name must be 50 characters or less."
         case .invalidPhotoURL:
             return "Photo URL must start with http:// or https://."
+        case .updateFailed(let error):
+            return "Failed to update user profile: \(error.localizedDescription)"
         }
     }
 }

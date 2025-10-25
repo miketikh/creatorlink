@@ -86,6 +86,11 @@ struct ChatDetailView: View {
                 }
             }
 
+            // Draft indicator banner (positioned above input)
+            if let draft = viewModel.currentDraft {
+                draftIndicatorBanner(draft: draft)
+            }
+
             // Input area
             messageInputArea
         }
@@ -537,14 +542,29 @@ struct ChatDetailView: View {
                 TextField("Message...", text: $messageText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .padding(8)
-                    .background(Color(.systemGray6))
+                    .background(viewModel.currentDraft != nil ? Color.indigo.opacity(0.05) : Color(.systemGray6))
                     .cornerRadius(20)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(viewModel.currentDraft != nil ? Color.indigo.opacity(0.3) : Color.clear, lineWidth: 1)
+                    )
                     .focused($isInputFocused)
                     .lineLimit(1...5)
                     .onChange(of: messageText) { oldValue, newValue in
                         // Trigger typing indicator when text changes
                         let isTyping = !newValue.isEmpty
                         viewModel.handleTypingChange(isTyping: isTyping)
+
+                        // Check if draft was modified
+                        if viewModel.currentDraft != nil {
+                            viewModel.onDraftTextChanged(newText: newValue)
+                        }
+                    }
+                    .onChange(of: viewModel.currentDraft) { oldDraft, newDraft in
+                        // Mark as loaded when draft changes
+                        if newDraft != nil {
+                            viewModel.isDraftLoaded = true
+                        }
                     }
 
                 Button {
@@ -562,6 +582,97 @@ struct ChatDetailView: View {
             .padding(.vertical, 8)
             .background(Color(.systemBackground))
         }
+    }
+
+    private func draftIndicatorBanner(draft: MessageDraft) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Left side: AI Draft icon and category
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+
+                    Text(viewModel.draftWasTouched ? "AI Draft (Edited)" : "AI Draft")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                }
+
+                Text(draft.category.displayName)
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.8))
+            }
+
+            Spacer()
+
+            // Right side: Draft text preview and buttons
+            VStack(alignment: .trailing, spacing: 6) {
+                // Buttons row
+                HStack(spacing: 8) {
+                    Button {
+                        useDraft(draft: draft)
+                    } label: {
+                        Text("Use")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.3))
+                            .cornerRadius(12)
+                    }
+
+                    Button {
+                        Task {
+                            await dismissDraft()
+                        }
+                    } label: {
+                        Text("Dismiss")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(0.2))
+                            .cornerRadius(12)
+                    }
+                }
+
+                // Draft text preview
+                Text(draft.text)
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 220, alignment: .trailing)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: viewModel.draftWasTouched ? [Color.indigo.opacity(0.8), Color.purple.opacity(0.8)] : [Color.indigo, Color.purple]),
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        )
+    }
+
+    private func useDraft(draft: MessageDraft) {
+        // Copy draft text into the message input field
+        messageText = draft.text
+        // Focus the input field so user can edit immediately
+        isInputFocused = true
+        // Dismiss the draft banner (without clearing text)
+        Task {
+            await viewModel.dismissDraft()
+        }
+    }
+
+    private func dismissDraft() async {
+        await viewModel.dismissDraft()
+        messageText = ""
     }
 
     // MARK: - Computed Properties

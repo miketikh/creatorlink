@@ -87,12 +87,24 @@ struct ConversationRowView: View {
                     }
                 }
 
-                // Show typing indicator or last message
+                // Show typing indicator, draft preview, or last message
                 if isOtherUserTyping {
                     Text(typingIndicatorText.isEmpty ? "typing..." : typingIndicatorText)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .italic()
+                } else if let draft = getDraft() {
+                    // Show draft preview with AI icon
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.caption)
+                            .foregroundColor(.indigo)
+
+                        Text("AI DRAFT: \(draft.previewText)")
+                            .font(.subheadline)
+                            .foregroundColor(.indigo)
+                            .lineLimit(2)
+                    }
                 } else {
                     HStack(spacing: 4) {
                         // Show status icon if last message is from current user
@@ -120,9 +132,16 @@ struct ConversationRowView: View {
 
             // Timestamp and unread badge
             VStack(alignment: .trailing, spacing: 4) {
-                Text(formattedTimestamp)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                // Show draft timestamp if draft exists, otherwise show last message time
+                if let draft = getDraft() {
+                    Text(DateFormatters.formatMessageTimestamp(draft.updatedAt))
+                        .font(.caption)
+                        .foregroundColor(.indigo)
+                } else {
+                    Text(formattedTimestamp)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
 
                 // Unread count badge
                 if unreadCount > 0 {
@@ -518,7 +537,8 @@ struct ConversationRowView: View {
                         email: data["email"] as? String ?? "",
                         photoURL: data["photoURL"] as? String,
                         isOnline: data["isOnline"] as? Bool ?? false,
-                        lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date()
+                        lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date(),
+                        aiResponseModeEnabled: data["aiResponseModeEnabled"] as? Bool
                     )
                 }
             }
@@ -750,6 +770,12 @@ struct ConversationRowView: View {
             let othersCount = displayNames.count - 2
             return "\(displayNames[0]), \(displayNames[1]), and \(othersCount) \(othersCount == 1 ? "other" : "others") are typing..."
         }
+    }
+
+    /// Gets draft for this conversation if one exists
+    private func getDraft() -> MessageDraft? {
+        guard let conversationId = conversation.id else { return nil }
+        return viewModel.getDraft(for: conversationId)
     }
 }
 

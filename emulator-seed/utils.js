@@ -85,30 +85,45 @@ function generateMessage() {
 
 /**
  * Create auth users in Firebase Authentication
+ * Fetches existing users if they already exist (by email) to ensure consistent UIDs
  * @param {admin.auth.Auth} auth - Firebase Auth instance
  * @param {Array} users - Array of user objects with displayName, email, and optional photoURL
  * @param {string} password - Password for all users
- * @returns {Promise<string[]>} Array of created user UIDs
+ * @returns {Promise<string[]>} Array of user UIDs (existing or newly created)
  */
 async function createAuthUsers(auth, users, password) {
-  console.log('👥 Creating auth users...');
+  console.log('👥 Creating/fetching auth users...');
   const userIds = [];
 
   for (const user of users) {
     try {
-      const userRecord = await auth.createUser({
-        email: user.email,
-        password: password,
-        displayName: user.displayName
-      });
+      // First, try to get existing user by email
+      let userRecord;
+      try {
+        userRecord = await auth.getUserByEmail(user.email);
+        console.log(`  ✓ Found existing ${user.displayName} (${userRecord.uid})`);
+      } catch (error) {
+        // User doesn't exist, create new one
+        if (error.code === 'auth/user-not-found') {
+          userRecord = await auth.createUser({
+            email: user.email,
+            password: password,
+            displayName: user.displayName
+          });
+          console.log(`  ✓ Created ${user.displayName} (${userRecord.uid})`);
+        } else {
+          throw error; // Re-throw unexpected errors
+        }
+      }
+
       userIds.push(userRecord.uid);
-      console.log(`  ✓ Created ${user.displayName} (${userRecord.uid})`);
     } catch (error) {
-      console.error(`  ✗ Failed to create ${user.displayName}:`, error.message);
+      console.error(`  ✗ Failed to create/fetch ${user.displayName}:`, error.message);
+      // Don't add to userIds array if there was an error
     }
   }
 
-  console.log(`\n✅ Created ${userIds.length} auth users\n`);
+  console.log(`\n✅ Processed ${userIds.length} auth users\n`);
   return userIds;
 }
 

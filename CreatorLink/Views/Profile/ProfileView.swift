@@ -36,6 +36,9 @@ struct ProfileView: View {
                         // Online Status
                         onlineStatusSection
 
+                        // AI Features Section
+                        aiFeaturesSection
+
                         Spacer()
 
                         // Error Message
@@ -276,6 +279,47 @@ struct ProfileView: View {
             }
             .foregroundColor(.primary)
             .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.systemGray6))
+            .cornerRadius(8)
+        }
+    }
+
+    private var aiFeaturesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("AI Features")
+                .font(.headline)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Toggle(isOn: Binding(
+                    get: { viewModel.aiResponseModeEnabled },
+                    set: { newValue in
+                        Task {
+                            do {
+                                try await viewModel.updateAIResponseMode(enabled: newValue)
+                            } catch {
+                                // Error is shown via viewModel.errorMessage
+                            }
+                        }
+                    }
+                )) {
+                    Text("AI Draft Responses")
+                        .font(.body)
+                }
+                .tint(.indigo)
+
+                Text("Automatically generate draft responses based on your communication style and knowledge")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Drafts appear in conversations when AI has enough context to respond")
+                    .font(.caption2)
+                    .foregroundColor(.secondary.opacity(0.8))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 12)
             .padding(.horizontal, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(.systemGray6))

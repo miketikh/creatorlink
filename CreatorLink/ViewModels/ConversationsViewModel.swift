@@ -22,10 +22,14 @@ class ConversationsViewModel {
     var selectedStatusFilters: [StatusTag] = []
     var showResolvedConversations: Bool = true
 
+    // Draft state properties
+    var draftsCache: [String: MessageDraft] = [:]  // conversationId → draft
+
     private let conversationService = ConversationService.shared
     private let userService = UserService.shared
     private let filterPreferencesService = FilterPreferencesService.shared
     private let taggingService = TaggingService.shared
+    private let draftService = DraftService.shared
     private var conversationsListener: ListenerRegistration?
     var currentUserId: String?
 
@@ -124,6 +128,9 @@ class ConversationsViewModel {
             if conversationsListener == nil {
                 setupListener(userId: userId)
             }
+
+            // Load drafts for all conversations
+            await loadDrafts(userId: userId)
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
@@ -441,5 +448,47 @@ class ConversationsViewModel {
         let statuses = userTagData.statusTags ?? []
 
         return (categories: categories, statuses: statuses)
+    }
+
+    // MARK: - Draft Management
+
+    /// Loads drafts for all conversations
+    /// - Parameter userId: The user ID to load drafts for
+    func loadDrafts(userId: String) async {
+        // Load drafts for each conversation in parallel
+        await withTaskGroup(of: (String, MessageDraft?).self) { group in
+            for conversation in conversations {
+                guard let conversationId = conversation.id else { continue }
+
+                group.addTask { [weak self] in
+                    guard let self = self else { return (conversationId, nil) }
+                    do {
+                        let draft = try await self.draftService.fetchDraft(
+                            conversationId: conversationId,
+                            userId: userId
+                        )
+                        return (conversationId, draft)
+                    } catch {
+                        // Log error for debugging (helps catch permission issues)
+                        print("⚠️ Failed to load draft for conversation \(conversationId): \(error.localizedDescription)")
+                        return (conversationId, nil)
+                    }
+                }
+            }
+
+            // Collect results
+            for await (conversationId, draft) in group {
+                if let draft = draft {
+                    draftsCache[conversationId] = draft
+                }
+            }
+        }
+    }
+
+    /// Gets draft for a specific conversation
+    /// - Parameter conversationId: The conversation ID
+    /// - Returns: MessageDraft if one exists
+    func getDraft(for conversationId: String) -> MessageDraft? {
+        return draftsCache[conversationId]
     }
 }

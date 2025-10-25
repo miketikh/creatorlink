@@ -14,6 +14,7 @@ struct UserProfile: Identifiable, Codable {
     let photoURL: String?
     let isOnline: Bool
     let lastSeen: Date
+    let aiResponseModeEnabled: Bool?  // Optional for backward compatibility
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -22,5 +23,11 @@ struct UserProfile: Identifiable, Codable {
         case photoURL
         case isOnline
         case lastSeen
+        case aiResponseModeEnabled
+    }
+
+    // Computed property to get AI response mode with default
+    var isAIResponseModeEnabled: Bool {
+        return aiResponseModeEnabled ?? false
     }
 }

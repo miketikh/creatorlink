@@ -35,6 +35,7 @@ This document provides comprehensive documentation for all Firebase data structu
 - `photoURL: String?` - *Optional* profile photo URL (must start with http:// or https://, empty string for default avatar)
 - `isOnline: Bool` - Current online status (synced from Realtime Database)
 - `lastSeen: Date` - Timestamp of last activity (stored as Firestore Timestamp, auto-updated on presence changes)
+- `aiResponseModeEnabled: Bool?` - *Optional* flag to enable AI draft response generation for this user (defaults to false if nil, backward compatible)
 
 #### Relationships
 

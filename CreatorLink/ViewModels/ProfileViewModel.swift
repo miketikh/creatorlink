@@ -24,6 +24,7 @@ class ProfileViewModel {
     var userProfile: UserProfile?
     var displayName: String = ""
     var photoURL: String = ""
+    var aiResponseModeEnabled: Bool = false
     var isLoading = false
     var errorMessage: String?
     var profileListener: ListenerRegistration?
@@ -66,12 +67,14 @@ class ProfileViewModel {
                         email: data["email"] as? String ?? "",
                         photoURL: data["photoURL"] as? String,
                         isOnline: data["isOnline"] as? Bool ?? false,
-                        lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date()
+                        lastSeen: (data["lastSeen"] as? Timestamp)?.dateValue() ?? Date(),
+                        aiResponseModeEnabled: data["aiResponseModeEnabled"] as? Bool
                     )
 
                     // Update local state
                     self.displayName = self.userProfile?.displayName ?? ""
                     self.photoURL = self.userProfile?.photoURL ?? ""
+                    self.aiResponseModeEnabled = self.userProfile?.isAIResponseModeEnabled ?? false
                 }
             }
     }
@@ -161,6 +164,34 @@ class ProfileViewModel {
         } catch {
             errorMessage = "Couldn't update profile photo. Please check your connection and try again."
             isLoading = false
+            throw error
+        }
+    }
+
+    // MARK: - Update AI Response Mode
+
+    /// Updates the user's AI response mode setting
+    /// - Parameter enabled: Whether AI response mode should be enabled
+    func updateAIResponseMode(enabled: Bool) async throws {
+        guard let userId = userService.currentUserId else {
+            throw UserServiceError.userNotFound
+        }
+
+        errorMessage = nil
+
+        do {
+            try await userService.updateAIResponseMode(
+                userId: userId,
+                enabled: enabled
+            )
+
+            // Update local state
+            aiResponseModeEnabled = enabled
+
+            // Track analytics
+            AnalyticsService.shared.trackEvent("ai_response_mode_\(enabled ? "enabled" : "disabled")")
+        } catch {
+            errorMessage = "Couldn't update AI response mode. Please check your connection and try again."
             throw error
         }
     }

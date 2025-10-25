@@ -82,5 +82,25 @@ service cloud.firestore {
 
       allow delete: if false;
     }
+
+    // Drafts subcollection (under conversations)
+    // AI-generated draft messages for users
+    match /conversations/{conversationId}/drafts/{userId} {
+      // Users can read their own drafts for conversations they participate in
+      allow read: if isAuthenticated() &&
+                     request.auth.uid == userId &&
+                     request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+
+      // Users can write/update their own drafts for conversations they participate in
+      // Cloud Functions with Admin SDK can also write (bypasses these rules)
+      allow write: if isAuthenticated() &&
+                      request.auth.uid == userId &&
+                      request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+
+      // Allow deletion of own drafts
+      allow delete: if isAuthenticated() &&
+                       request.auth.uid == userId &&
+                       request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+    }
   }
 }
