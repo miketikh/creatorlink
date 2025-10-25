@@ -20,35 +20,38 @@ struct GroupAvatarView: View {
     @State private var groupName: String?
 
     var body: some View {
+        // Filter out AI from participant count and composite generation
+        let nonAIParticipants = participantIds.filter { $0 != AIConstants.AI_USER_ID }
+
         Group {
             if let groupImageUrl = groupImageUrl, !groupImageUrl.isEmpty {
                 // Priority 1: Custom group image
-                customImageView(url: groupImageUrl)
-            } else if participantIds.count >= 3 && participantIds.count <= 4 && !participantPhotos.isEmpty {
-                // Priority 2: Composite avatar for 3-4 participants
+                customImageView(url: groupImageUrl, nonAICount: nonAIParticipants.count)
+            } else if nonAIParticipants.count >= 3 && nonAIParticipants.count <= 4 && !participantPhotos.isEmpty {
+                // Priority 2: Composite avatar for 3-4 participants (excluding AI)
                 CompositeAvatarView(photoUrls: participantPhotos, size: size)
             } else {
                 // Priority 3: Placeholder
                 placeholderView
             }
         }
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(accessibilityLabel(nonAICount: nonAIParticipants.count))
         .task {
-            await fetchParticipantPhotos()
+            await fetchParticipantPhotos(nonAIParticipants: nonAIParticipants)
         }
     }
 
-    private var accessibilityLabel: String {
+    private func accessibilityLabel(nonAICount: Int) -> String {
         if let name = groupNameForAccessibility {
-            return "Group avatar for \(name), \(participantIds.count) members"
+            return "Group avatar for \(name), \(nonAICount) members"
         } else {
-            return "Group avatar, \(participantIds.count) members"
+            return "Group avatar, \(nonAICount) members"
         }
     }
 
     // MARK: - Subviews
 
-    private func customImageView(url: String) -> some View {
+    private func customImageView(url: String, nonAICount: Int) -> some View {
         AsyncImage(url: URL(string: url)) { phase in
             switch phase {
             case .empty:
@@ -63,7 +66,7 @@ struct GroupAvatarView: View {
             case .failure:
                 // Fallback to composite or placeholder if custom image fails
                 Group {
-                    if participantIds.count >= 3 && participantIds.count <= 4 && !participantPhotos.isEmpty {
+                    if nonAICount >= 3 && nonAICount <= 4 && !participantPhotos.isEmpty {
                         CompositeAvatarView(photoUrls: participantPhotos, size: size)
                     } else {
                         placeholderView
@@ -119,9 +122,9 @@ struct GroupAvatarView: View {
 
     // MARK: - Methods
 
-    private func fetchParticipantPhotos() async {
-        // Fetch up to 4 participant profiles
-        let idsToFetch = Array(participantIds.prefix(4))
+    private func fetchParticipantPhotos(nonAIParticipants: [String]) async {
+        // Fetch up to 4 participant profiles (excluding AI)
+        let idsToFetch = Array(nonAIParticipants.prefix(4))
 
         var photos: [String] = []
         for userId in idsToFetch {

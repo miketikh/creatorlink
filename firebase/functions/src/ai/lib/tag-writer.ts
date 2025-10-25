@@ -33,20 +33,10 @@ export async function updateConversationTags(
   try {
     const categoryConfidence = categorizationResult.category.confidence;
 
-    // Validate confidence threshold
-    if (categoryConfidence < minimumConfidence) {
-      logger.info("Skipping tag update - confidence below threshold", {
-        conversationId,
-        confidence: categoryConfidence,
-        threshold: minimumConfidence,
-      });
-      return false;
-    }
-
-    logger.info("Updating conversation tags", {
+    logger.info("Processing tag update", {
       conversationId,
       category: categorizationResult.category.category,
-      confidence: categoryConfidence,
+      categoryConfidence: categoryConfidence,
       statusTagsByUser: categorizationResult.status.statusTagsByUser,
     });
 
@@ -72,28 +62,46 @@ export async function updateConversationTags(
         return false;
       }
 
-      // Calculate primary category (considers existing category for stability)
-      const primaryCategory = calculatePrimaryCategory(
-        categorizationResult.category.category,
-        conversationData?.primaryCategory,
-        categorizationResult.category.confidence
-      );
-
       // Build update payload
       // IMPORTANT: Field names must match Swift Conversation.swift model:
       // - categoryTags (not categories)
       // - tagMetadata (not aiTagMetadata)
       // - Status tags go in tagsByUser (per-user), NOT at conversation level
-      const updateData: any = {
-        primaryCategory: primaryCategory,
-        categoryTags: [primaryCategory],
-        tagMetadata: {
-          aiSuggestedCategory: primaryCategory,
-          aiConfidenceScore: categorizationResult.category.confidence,
-          userOverrideCategory: false,
-          userOverrideStatus: false,
-          lastAIAnalysisTime: FieldValue.serverTimestamp(),
-        },
+      const updateData: any = {};
+
+      // Category updates - ONLY if confidence meets threshold
+      if (categoryConfidence >= minimumConfidence) {
+        // Calculate primary category (considers existing category for stability)
+        const primaryCategory = calculatePrimaryCategory(
+          categorizationResult.category.category,
+          conversationData?.primaryCategory,
+          categorizationResult.category.confidence
+        );
+
+        updateData.primaryCategory = primaryCategory;
+        updateData.categoryTags = [primaryCategory];
+
+        logger.info("Updating category", {
+          conversationId,
+          category: primaryCategory,
+          confidence: categoryConfidence,
+        });
+      } else {
+        logger.info("Skipping category update - confidence below threshold", {
+          conversationId,
+          confidence: categoryConfidence,
+          threshold: minimumConfidence,
+          keepingExisting: conversationData?.primaryCategory,
+        });
+      }
+
+      // Always update tagMetadata for tracking (even if category unchanged)
+      updateData.tagMetadata = {
+        aiSuggestedCategory: categorizationResult.category.category.toString(),
+        aiConfidenceScore: categorizationResult.category.confidence,
+        userOverrideCategory: false,
+        userOverrideStatus: false,
+        lastAIAnalysisTime: FieldValue.serverTimestamp(),
       };
 
       // Build per-user status tags from AI result (NO manual logic!)
@@ -137,25 +145,37 @@ export async function updateConversationTags(
         });
       }
 
-      transaction.update(conversationRef, updateData);
+      // Only perform update if we have fields to update
+      if (Object.keys(updateData).length > 0) {
+        transaction.update(conversationRef, updateData);
 
-      logger.info("Transaction prepared - tags will be updated", {
-        conversationId,
-        primaryCategory,
-        confidence: updateData.tagMetadata.aiConfidenceScore,
-        tagsByUser: updateData.tagsByUser,
-      });
+        logger.info("Transaction prepared - tags will be updated", {
+          conversationId,
+          updatingCategory: !!updateData.primaryCategory,
+          category: updateData.primaryCategory,
+          updatingStatusTags: !!updateData.tagsByUser,
+          tagsByUser: updateData.tagsByUser,
+        });
 
-      return true;
+        return true;
+      } else {
+        logger.info("No updates to apply", {conversationId});
+        return false;
+      }
     });
 
     const duration = Date.now() - startTime;
 
     if (success) {
+      const updatedCategory = categoryConfidence >= minimumConfidence;
+      const updatedStatus = categorizationResult.status.statusTagsByUser &&
+        Object.keys(categorizationResult.status.statusTagsByUser).length > 0;
+
       logger.info("✅ Conversation tags updated successfully", {
         conversationId,
-        category: categorizationResult.category.category,
-        confidence: categoryConfidence,
+        updatedCategory,
+        updatedStatus,
+        categoryConfidence,
         statusTagsByUser: categorizationResult.status.statusTagsByUser,
         durationMs: duration,
       });

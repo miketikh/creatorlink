@@ -162,8 +162,9 @@ struct ChatDetailView: View {
                         }
 
                         if conversation.isGroupChat {
-                            // Show participant count for groups
-                            Text("\(conversation.participantIds.count) members")
+                            // Show participant count for groups (excluding AI)
+                            let nonAICount = conversation.participantIds.filter { $0 != AIConstants.AI_USER_ID }.count
+                            Text("\(nonAICount) members")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
                         } else {

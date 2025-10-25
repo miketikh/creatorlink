@@ -11,9 +11,6 @@ import {clearCachedResult} from "./rate-limiter";
 // AI user constant - must match AIConstants.swift in iOS app
 const AI_USER_ID = "ai-assistant";
 
-// Rate limiting: Don't re-analyze within this many milliseconds (60 seconds for same sender)
-const ANALYSIS_COOLDOWN_MS = 60 * 1000;
-
 /**
  * Fetch recent conversation messages for AI context analysis.
  *
@@ -129,43 +126,20 @@ export async function shouldAnalyzeMessage(
     const currentSenderId = messageData?.senderId;
     const lastMessageSenderId = conversationData.lastMessageSenderId;
 
-    // Check if sender changed - if yes, analyze immediately (skip cooldown)
-    // This allows status tags to update in real-time during conversation flow
+    // Clear cache if sender changed to force fresh analysis
     if (lastMessageSenderId && currentSenderId !== lastMessageSenderId) {
-      // Clear cache to force fresh analysis
       clearCachedResult(conversationId);
-
-      logger.info("Sender changed - analyzing immediately", {
+      logger.info("Sender changed - clearing cache for fresh analysis", {
         conversationId,
         previousSender: lastMessageSenderId,
         currentSender: currentSenderId,
       });
-      return true;
     }
 
-    // Same sender - apply cooldown to prevent excessive API calls
-    const lastAnalyzed = conversationData.tagMetadata?.lastAIAnalysisTime;
-    if (lastAnalyzed) {
-      const lastAnalyzedTime = lastAnalyzed.toMillis ? lastAnalyzed.toMillis() :
-                                (typeof lastAnalyzed === 'number' ? lastAnalyzed : 0);
-      const timeSinceLastAnalysis = Date.now() - lastAnalyzedTime;
-
-      if (timeSinceLastAnalysis < ANALYSIS_COOLDOWN_MS) {
-        logger.info("Skipping - same sender, recently analyzed", {
-          conversationId,
-          senderId: currentSenderId,
-          timeSinceLastAnalysisMs: timeSinceLastAnalysis,
-          cooldownMs: ANALYSIS_COOLDOWN_MS,
-        });
-        return false;
-      }
-    }
-
-    // All checks passed
+    // Analyze every message - no cooldown
     logger.info("Message should be analyzed", {
       conversationId,
       senderId: currentSenderId,
-      reason: lastMessageSenderId ? "cooldown expired" : "first analysis",
     });
     return true;
 

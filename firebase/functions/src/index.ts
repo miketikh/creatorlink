@@ -244,13 +244,14 @@ export const onMessageCreated = onDocumentCreated(
         return null;
       }
 
-      // Fetch existing category from conversation document
+      // Fetch existing category and tags from conversation document
       const conversationDoc = await admin.firestore()
         .collection("conversations")
         .doc(conversationId)
         .get();
 
       const existingCategory = conversationDoc.data()?.primaryCategory;
+      const existingTagsByUser = conversationDoc.data()?.tagsByUser;
 
       // Categorize the conversation
       // Pass participant info so AI can assign per-user status tags
@@ -260,7 +261,8 @@ export const onMessageCreated = onDocumentCreated(
         existingCategory,
         conversationId,
         participantIds,
-        messageData?.senderId
+        messageData?.senderId,
+        existingTagsByUser
       );
 
       logger.info("Categorization result", {

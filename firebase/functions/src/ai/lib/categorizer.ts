@@ -30,6 +30,7 @@ import {
  * @param conversationId - Conversation ID for caching
  * @param participantIds - Array of participant user IDs
  * @param lastMessageSenderId - ID of user who sent the last message
+ * @param existingTagsByUser - Current status tags per user
  * @returns Promise with categorization result including category and per-user status tags
  */
 export async function categorizeConversation(
@@ -38,7 +39,8 @@ export async function categorizeConversation(
   existingCategory?: string,
   conversationId?: string,
   participantIds?: string[],
-  lastMessageSenderId?: string
+  lastMessageSenderId?: string,
+  existingTagsByUser?: { [userId: string]: { statusTags: string[] } }
 ): Promise<CategorizationResult> {
   const startTime = Date.now();
 
@@ -47,11 +49,12 @@ export async function categorizeConversation(
       messageLength: messageText.length,
       historyCount: conversationHistory.length,
       existingCategory,
+      existingTagsByUser,
       conversationId,
     });
 
-    // Check cache first
-    if (conversationId) {
+    // Check cache first (skip cache if we have existing tags - cache doesn't account for tag context)
+    if (conversationId && !existingTagsByUser) {
       const cachedResult = getCachedResult(conversationId);
       if (cachedResult) {
         logger.info("Returning cached categorization result", {
@@ -60,6 +63,10 @@ export async function categorizeConversation(
         });
         return cachedResult;
       }
+    } else if (conversationId && existingTagsByUser) {
+      logger.info("Skipping cache - analyzing with existing tags context", {
+        conversationId,
+      });
     }
 
     // Check global rate limit
@@ -85,6 +92,21 @@ export async function categorizeConversation(
     const participantMapping = participantIds && participantIds.length > 0 ?
       participantIds.map((id, index) => `- User ${String.fromCharCode(65 + index)} (ID: ${id})`).join("\n") : "";
 
+    // Build existing tags display
+    let existingTagsSection = "";
+    if (existingTagsByUser && Object.keys(existingTagsByUser).length > 0) {
+      const tagLines = Object.entries(existingTagsByUser).map(([userId, data]) => {
+        const tags = data.statusTags || [];
+        const tagList = tags.length > 0 ? JSON.stringify(tags) : "[] (no tags)";
+        return `- ${userId}: ${tagList}`;
+      }).join("\n");
+      existingTagsSection = `\n\nCURRENT STATUS TAGS:\n${tagLines}`;
+    } else if (participantIds && participantIds.length > 0) {
+      // Show that all participants have no tags
+      const tagLines = participantIds.map(id => `- ${id}: [] (no tags)`).join("\n");
+      existingTagsSection = `\n\nCURRENT STATUS TAGS:\n${tagLines}`;
+    }
+
     const systemPrompt = `You are a conversation classifier. Analyze conversations and assign tags based on category and each participant's perspective.
 
 CATEGORIES (choose ONE):
@@ -98,10 +120,12 @@ IMPORTANT: If an existing category is provided, keep it UNLESS there's very stro
 STATUS TAGS (assign to each participant based on their perspective):
 - "needsResponse": This person needs to reply to a question or request
 - "awaitingReply": This person is waiting for someone else to respond
-- "urgent": This person needs to respond quickly - immediate plans, time-sensitive questions, things happening soon (next hour or so)/now, or explicit urgency.  
+- "urgent": This person needs to respond quickly - immediate plans, time-sensitive questions, things happening soon (next hour or so)/now, or explicit urgency.
 
 IMPORTANT - Status Tag Rules:
-- Only include participants whose tags should change
+- You are UPDATING existing tags, not creating from scratch
+- Review the CURRENT STATUS TAGS carefully - they show what's already set
+- Only include participants whose tags should CHANGE from their current state
 - Use empty array [] to clear all tags for that participant
 - Omit participant ID if their tags should remain unchanged
 - Analyze the status changes from both participants (ie. if someone was waiting for a reply then responded with a question, it should update statuses for both participants)
@@ -156,7 +180,7 @@ Respond with JSON:
     const senderInfo = lastMessageSenderId ?
       `\nLast message sent by: ${lastMessageSenderId}` : "";
 
-    const userPrompt = `${participantSection}
+    const userPrompt = `${participantSection}${existingTagsSection}
 
 CONVERSATION HISTORY:
 ${contextMessages}
@@ -166,8 +190,8 @@ ${senderInfo}
 
 ${existingCategory ? `EXISTING CATEGORY: ${existingCategory}` : "NO EXISTING CATEGORY"}
 
-Analyze this conversation and update status tags based on participant perspective.
-Only include participants whose tags should change. Use [] to clear tags, omit if unchanged.`;
+Review the CURRENT STATUS TAGS above. Based on the new message, determine which tags should change.
+Return ONLY the participants whose tags need updating. Use [] to clear all tags, omit if unchanged.`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
@@ -253,9 +277,8 @@ function normalizeCategorizationResult(result: any): CategorizationResult {
       })
       .filter((s: any): s is StatusTag => s !== undefined);
 
-    if (validTags.length > 0) {
-      statusTagsByUser[userId] = validTags;
-    }
+    // Always include the user, even with empty array (empty = clear tags)
+    statusTagsByUser[userId] = validTags;
   }
 
   const status: StatusDetectionResult = {

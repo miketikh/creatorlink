@@ -379,8 +379,16 @@ struct GroupInfoView: View {
                         .stroke(Color(.systemGray4), lineWidth: 0.5)
                 )
             } else {
+                // Sort participants: humans first, then AI last
+                let sortedParticipants = viewModel.participants.sorted { p1, p2 in
+                    let p1IsAI = p1.id == AIConstants.AI_USER_ID
+                    let p2IsAI = p2.id == AIConstants.AI_USER_ID
+                    if p1IsAI == p2IsAI { return false } // Keep original order for same type
+                    return !p1IsAI && p2IsAI // Humans before AI
+                }
+
                 VStack(spacing: 0) {
-                    ForEach(viewModel.participants) { participant in
+                    ForEach(sortedParticipants) { participant in
                         let currentUserId = UserService.shared.currentUserId ?? ""
                         let isCurrentUser = participant.id == currentUserId
 
@@ -410,7 +418,7 @@ struct GroupInfoView: View {
                                 }
                             }
 
-                            if participant.id != viewModel.participants.last?.id {
+                            if participant.id != sortedParticipants.last?.id {
                                 Divider()
                                     .padding(.leading, 56)
                             }
