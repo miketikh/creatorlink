@@ -131,6 +131,32 @@ export interface VoiceProfile {
   lastUpdated: Date;
 }
 
+/**
+ * AI-generated draft message for a conversation.
+ * Stored in conversations/{conversationId}/drafts/{userId} subcollection.
+ * Simple schema with just the essentials for functionality.
+ */
+export interface MessageDraft {
+  id?: string; // Firestore document ID (optional)
+  conversationId: string; // Parent conversation
+  userId: string; // Who the draft is for (the recipient)
+  text: string; // Draft message text
+  category: ConversationCategory; // Conversation category
+  generatedAt: Date; // When draft was generated
+  updatedAt: Date; // When draft was last updated
+  userTouched?: boolean; // User manually edited draft (prevents auto-updates)
+}
+
+/**
+ * Result from draft generation operation.
+ */
+export interface DraftGenerationResult {
+  success: boolean;
+  draft?: MessageDraft;
+  reason?: string; // Why generation succeeded/failed
+  error?: string;
+}
+
 // Add more types here as we expand AI functionality
 // Example future types:
 // - ContextDetectionResult

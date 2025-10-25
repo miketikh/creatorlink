@@ -473,14 +473,14 @@ This phase implements static voice profile configuration system that stores manu
 
 This phase implements the core draft generation system that combines knowledge retrieval and voice profiles to create personalized response drafts.
 
-### PR 3.1: Draft Schema & Types
+### PR 3.1: Draft Schema & Types ✅ COMPLETED
 
 **Goal:** Define data models for storing AI-generated draft responses in Firestore.
 
 **Tasks:**
-- [ ] Read PRD section on Conversation Draft data model
-- [ ] Read existing `firebase/functions/src/ai/types.ts`
-- [ ] Add new types to `firebase/functions/src/ai/types.ts`:
+- [x] Read PRD section on Conversation Draft data model
+- [x] Read existing `firebase/functions/src/ai/types.ts`
+- [x] Add new types to `firebase/functions/src/ai/types.ts`:
   - `MessageDraft` interface with fields:
     - id?: string (document ID)
     - conversationId: string
@@ -502,12 +502,12 @@ This phase implements the core draft generation system that combines knowledge r
     - draft?: MessageDraft
     - reason?: string (why generation succeeded/failed)
     - error?: string
-- [ ] Update `db-types.md` with new Firestore subcollection:
+- [x] Update `db-types.md` with new Firestore subcollection:
   - Subcollection: `conversations/{conversationId}/drafts/{userId}`
   - Document all fields
   - Note: One draft per user per conversation (overwrites on update)
   - Add indexes if needed
-- [ ] Export new types from `firebase/functions/src/ai/index.ts`
+- [x] Export new types from `firebase/functions/src/ai/index.ts`
 
 **What to Test:**
 1. Build TypeScript: `cd firebase/functions && npm run build`
@@ -527,19 +527,19 @@ This phase implements the core draft generation system that combines knowledge r
 
 ---
 
-### PR 3.2: Draft Prerequisites Check
+### PR 3.2: Draft Prerequisites Check ✅ COMPLETED
 
 **Goal:** Implement logic to determine if sufficient data exists to generate a quality draft.
 
 **Tasks:**
-- [ ] Create NEW: `firebase/functions/src/ai/lib/draft-prerequisites.ts`:
+- [x] Create NEW: `firebase/functions/src/ai/lib/draft-prerequisites.ts`:
   - Implement `checkDraftPrerequisites(userId: string, category: ConversationCategory, messageText: string): Promise<boolean>`
   - Check 1: Voice profile exists (using loadVoiceProfile from Phase 2, returns non-null)
   - Check 2: Message is a question or request (reuse question detector)
   - Check 3: Relevant knowledge available (search knowledge base, check if results > 0 with similarity > 0.7)
   - Return simple boolean: true if all checks pass, false otherwise
   - Add logging for debugging which specific checks failed
-- [ ] Export function from `firebase/functions/src/ai/index.ts`
+- [x] Export function from `firebase/functions/src/ai/index.ts`
 
 **What to Test:**
 1. Build project: `cd firebase/functions && npm run build`
@@ -561,13 +561,13 @@ This phase implements the core draft generation system that combines knowledge r
 
 ---
 
-### PR 3.3: Draft Generation LLM Function
+### PR 3.3: Draft Generation LLM Function ✅ COMPLETED
 
 **Goal:** Implement LLM-based draft generation that combines knowledge, voice profile, and conversation context.
 
 **Tasks:**
-- [ ] Read `firebase/functions/src/ai/lib/faq-matcher.ts` and `categorizer.ts` for complex LLM prompting
-- [ ] Create NEW: `firebase/functions/src/ai/lib/draft-generator.ts`:
+- [x] Read `firebase/functions/src/ai/lib/faq-matcher.ts` and `categorizer.ts` for complex LLM prompting
+- [x] Create NEW: `firebase/functions/src/ai/lib/draft-generator.ts`:
   - Implement `generateDraft(userId: string, conversationId: string, incomingMessages: ConversationMessage[], category: ConversationCategory): Promise<DraftGenerationResult>`
   - Fetch voice profile for user + category (profile either exists or doesn't)
   - Extract latest message(s) as the prompt to respond to
@@ -588,7 +588,7 @@ This phase implements the core draft generation system that combines knowledge r
     - Conversation context: 0.4 if sufficient history, 0.0 if not
     - (No profile confidence component - profile either exists or generation doesn't happen)
   - Return DraftGenerationResult
-- [ ] Export function from `firebase/functions/src/ai/index.ts`
+- [x] Export function from `firebase/functions/src/ai/index.ts`
 
 **What to Test:**
 1. Build project: `cd firebase/functions && npm run build`
@@ -616,12 +616,12 @@ This phase implements the core draft generation system that combines knowledge r
 
 ---
 
-### PR 3.4: Draft Storage & Update Logic
+### PR 3.4: Draft Storage & Update Logic ✅ COMPLETED
 
 **Goal:** Implement service to save/update drafts in Firestore with intelligent update logic.
 
 **Tasks:**
-- [ ] Create NEW: `firebase/functions/src/ai/lib/draft-manager.ts`:
+- [x] Create NEW: `firebase/functions/src/ai/lib/draft-manager.ts`:
   - Implement `saveDraft(draft: MessageDraft): Promise<string>`
   - Save to `conversations/{conversationId}/drafts/{userId}`
   - Use set with merge to overwrite existing draft
@@ -638,7 +638,7 @@ This phase implements the core draft generation system that combines knowledge r
   - Implement `markDraftTouched(conversationId: string, userId: string): Promise<void>`
   - Add metadata field `userTouched: true` to draft
   - Used in Phase 4 to prevent auto-updates of edited drafts
-- [ ] Export functions from `firebase/functions/src/ai/index.ts`
+- [x] Export functions from `firebase/functions/src/ai/index.ts`
 
 **What to Test:**
 1. Build project: `cd firebase/functions && npm run build`
@@ -660,13 +660,13 @@ This phase implements the core draft generation system that combines knowledge r
 
 ---
 
-### PR 3.5: Draft Generation Cloud Function
+### PR 3.5: Draft Generation Cloud Function ✅ COMPLETED
 
 **Goal:** Create Cloud Function trigger that generates drafts when users receive messages.
 
 **Tasks:**
-- [ ] Read `firebase/functions/src/index.ts` onMessageCreated trigger
-- [ ] Update `firebase/functions/src/index.ts`:
+- [x] Read `firebase/functions/src/index.ts` onMessageCreated trigger
+- [x] Update `firebase/functions/src/index.ts`:
   - Within `onMessageCreated` trigger, add new section for draft generation
   - Import draft-related functions
   - After message created:
@@ -683,8 +683,8 @@ This phase implements the core draft generation system that combines knowledge r
           - Save draft to Firestore
       - Add comprehensive logging
   - Use try/catch to prevent blocking message creation
-- [ ] Add feature flag: `ENABLE_DRAFT_GENERATION` (default: false initially)
-- [ ] Add configuration: `DRAFT_MIN_CONFIDENCE` (default: 0.5)
+- [x] Add feature flag: `ENABLE_DRAFT_GENERATION` (default: false initially)
+- [x] Add configuration: `DRAFT_MIN_CONFIDENCE` (default: 0.5)
 
 **What to Test:**
 1. Rebuild functions: `cd firebase/functions && npm run build`
@@ -710,12 +710,12 @@ This phase implements the core draft generation system that combines knowledge r
 
 ---
 
-### PR 3.6: Draft Update on New Messages
+### PR 3.6: Draft Update on New Messages ✅ COMPLETED
 
 **Goal:** Implement logic to update existing drafts when sender sends additional messages.
 
 **Tasks:**
-- [ ] Update `firebase/functions/src/index.ts` onMessageCreated trigger:
+- [x] Update `firebase/functions/src/index.ts` onMessageCreated trigger:
   - After draft generation section, add draft update section
   - When message created, check all participants:
     - For each other participant (potential draft owner):
@@ -728,7 +728,7 @@ This phase implements the core draft generation system that combines knowledge r
           - Update sourceMessageIds to include new messages
           - Save updated draft
   - Add logging for draft updates
-- [ ] Add configuration: `MAX_DRAFT_AGE_MINUTES` (default: 60)
+- [x] Add configuration: `MAX_DRAFT_AGE_MINUTES` (default: 60)
   - Only update drafts created/updated within last hour
   - Older drafts assumed stale or abandoned
 
@@ -753,13 +753,13 @@ This phase implements the core draft generation system that combines knowledge r
 
 ---
 
-### PR 3.7: iOS Draft Model (Read-Only for Phase 3)
+### PR 3.7: iOS Draft Model (Read-Only for Phase 3) ✅ COMPLETED
 
 **Goal:** Create Swift model for MessageDraft to enable future iOS features (Phase 4), but no UI integration yet.
 
 **Tasks:**
-- [ ] Read `CreatorLink/Models/Message.swift` for Swift model patterns
-- [ ] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/CreatorLink/Models/MessageDraft.swift`:
+- [x] Read `CreatorLink/Models/Message.swift` for Swift model patterns
+- [x] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/CreatorLink/Models/MessageDraft.swift`:
   - Define `MessageDraft` struct conforming to Codable, Hashable, Identifiable
   - Use @DocumentID for id field
   - Mirror TypeScript MessageDraft structure exactly
@@ -768,8 +768,8 @@ This phase implements the core draft generation system that combines knowledge r
   - Add CodingKeys enum
   - Add computed property `isHighConfidence: Bool` returning `confidence > 0.7`
   - Add preview text helper: `var previewText: String` returning first 50 chars
-- [ ] No service integration yet (Phase 4)
-- [ ] Update `db-types.md` with Swift model reference
+- [x] No service integration yet (Phase 4)
+- [x] Update `db-types.md` with Swift model reference
 
 **What to Test:**
 1. Build iOS project in Xcode - verify no compilation errors

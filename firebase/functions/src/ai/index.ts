@@ -16,6 +16,9 @@ export {generateEmbedding, generateEmbeddingsBatch, cosineSimilarity} from "./li
 export {storeKnowledgeFact, getKnowledgeByUserId} from "./lib/knowledge-store";
 export {searchKnowledge, searchKnowledgeWithScores} from "./lib/knowledge-retriever";
 export {loadVoiceProfile} from "./lib/voice-profile-loader";
+export {checkDraftPrerequisites} from "./lib/draft-prerequisites";
+export {generateDraft} from "./lib/draft-generator";
+export {saveDraft, getDraft, deleteDraft, shouldUpdateDraft, markDraftTouched} from "./lib/draft-manager";
 export {
   getCachedResult,
   setCachedResult,
@@ -38,6 +41,8 @@ export type {
   KnowledgeFact,
   KnowledgeExtractionResult,
   VoiceProfile,
+  MessageDraft,
+  DraftGenerationResult,
 } from "./types";
 export type {ConversationMessage} from "./lib/message-fetcher";
 export type {FAQMatch} from "./lib/faq-matcher";

@@ -19,6 +19,11 @@ import {
   updateConversationTags,
   extractKnowledge,
   storeKnowledgeFact,
+  checkDraftPrerequisites,
+  generateDraft,
+  saveDraft,
+  getDraft,
+  shouldUpdateDraft,
 } from "./ai";
 
 // Initialize Firebase Admin SDK
@@ -435,6 +440,157 @@ export const onMessageCreated = onDocumentCreated(
         error: error instanceof Error ? error.message : String(error),
       });
       // Don't throw - knowledge extraction errors shouldn't fail the entire function
+    }
+
+    // PHASE 3: Draft Generation - Generate personalized response drafts for recipients
+    try {
+      // Check feature flag (default disabled until tested)
+      const draftGenerationEnabled = process.env.ENABLE_DRAFT_GENERATION === "true";
+
+      if (!draftGenerationEnabled) {
+        logger.info("Draft generation disabled by feature flag", {
+          conversationId,
+        });
+        return null;
+      }
+
+      // Skip if message from AI user or system
+      if (messageData?.senderId === AI_USER_ID || messageData?.senderId === "system") {
+        logger.info("Skipping draft generation for AI/system message", {
+          messageId,
+          senderId: messageData?.senderId,
+        });
+        return null;
+      }
+
+      // Get conversation document to determine category
+      const conversationDoc = await admin.firestore()
+        .collection("conversations")
+        .doc(conversationId)
+        .get();
+
+      const conversationData = conversationDoc.data();
+      const category = conversationData?.primaryCategory || "social"; // Default to social if no category
+
+      logger.info("Starting draft generation for recipients", {
+        conversationId,
+        messageId,
+        senderId: messageData?.senderId,
+        category,
+        participantCount: participantIds.length,
+      });
+
+      // Generate drafts for each recipient (excluding sender and AI)
+      const recipients = participantIds.filter(
+        (userId: string) => userId !== messageData?.senderId && userId !== AI_USER_ID
+      );
+
+      logger.info("Identified recipients for draft generation", {
+        conversationId,
+        recipientCount: recipients.length,
+        recipients,
+      });
+
+      // Process each recipient
+      for (const recipientId of recipients) {
+        try {
+          logger.info("Processing draft for recipient", {
+            conversationId,
+            recipientId,
+            category,
+          });
+
+          // Check prerequisites
+          const prerequisitesMet = await checkDraftPrerequisites(
+            recipientId,
+            category,
+            messageText
+          );
+
+          if (!prerequisitesMet) {
+            logger.info("Prerequisites not met for draft generation", {
+              conversationId,
+              recipientId,
+              category,
+            });
+            continue; // Skip this recipient
+          }
+
+          // Get existing draft
+          const existingDraft = await getDraft(conversationId, recipientId);
+
+          // Check if should update draft (checks userTouched and age internally)
+          const shouldUpdate = await shouldUpdateDraft(existingDraft);
+
+          if (!shouldUpdate) {
+            logger.info("Draft already up-to-date, skipping", {
+              conversationId,
+              recipientId,
+            });
+            continue;
+          }
+
+          // Fetch recent messages for context (up to 3 messages including current)
+          const recentMessages = await fetchConversationMessages(conversationId, 3);
+          const incomingMessages = recentMessages.filter(msg => msg.id === messageId || msg.senderId !== recipientId);
+
+          // Generate draft
+          logger.info("Generating draft", {
+            conversationId,
+            recipientId,
+            category,
+            incomingMessageCount: incomingMessages.length,
+          });
+
+          const draftResult = await generateDraft(
+            recipientId,
+            conversationId,
+            incomingMessages,
+            category
+          );
+
+          if (!draftResult.success || !draftResult.draft) {
+            logger.warn("Draft generation failed", {
+              conversationId,
+              recipientId,
+              reason: draftResult.reason,
+              error: draftResult.error,
+            });
+            continue;
+          }
+
+          // Save draft to Firestore
+          await saveDraft(draftResult.draft);
+
+          logger.info("✅ Draft generated and saved successfully", {
+            conversationId,
+            recipientId,
+            draftLength: draftResult.draft.text.length,
+          });
+
+        } catch (error) {
+          logger.error("Error generating draft for recipient", {
+            conversationId,
+            recipientId,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          // Continue to next recipient
+        }
+      }
+
+      logger.info("✅ Draft generation processing complete", {
+        conversationId,
+        messageId,
+        recipientCount: recipients.length,
+      });
+
+    } catch (error) {
+      logger.error("Error during draft generation", {
+        conversationId,
+        messageId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Don't throw - draft generation errors shouldn't fail the entire function
     }
 
     return null;
