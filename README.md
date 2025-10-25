@@ -142,30 +142,11 @@ Or manually via Firebase Console by copying contents from the `firebase/` direct
 
 ## Project Structure
 
-```
-CreatorLink/
-├── CreatorLink/                    # iOS app source
-│   ├── Models/                     # Data models (User, Conversation, Message)
-│   ├── Services/                   # Firebase services and business logic
-│   ├── ViewModels/                 # View models for state management
-│   ├── Views/                      # SwiftUI views
-│   ├── Utilities/                  # Helper utilities
-│   ├── Assets.xcassets/            # Images and assets
-│   ├── GoogleService-Info.plist    # Firebase config (not in git)
-│   └── Info.plist                  # App configuration
-├── CreatorLink.xcodeproj/          # Xcode project file
-├── firebase/                       # Firebase configuration
-│   ├── firebase.json               # Emulator configuration
-│   ├── .firebaserc                 # Firebase project alias
-│   ├── firestore.rules             # Firestore security rules
-│   ├── storage.rules               # Storage security rules
-│   └── database.rules.json         # Realtime Database security rules
-├── emulator-seed/                  # Seed data for local testing
-│   ├── seed.js                     # Seed script
-│   ├── package.json                # Node dependencies
-│   └── node_modules/               # (not in git)
-└── README.md
-```
+- **CreatorLink/** - iOS app built with SwiftUI. See the Xcode project to build and run.
+- **firebase/** - Firebase emulator configuration and Cloud Functions. See `firebase/README.md` for setup details.
+- **emulator-seed/** - Scripts for populating Firebase emulators with test data. See `emulator-seed/README.md` for usage.
+- **python-service/** - Planned Python service for AI features with Qdrant vector storage (not currently in use). See `python-service/README.md` for details.
+- **Docs/** - Project documentation and planning materials.
 
 ## Troubleshooting
 

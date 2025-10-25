@@ -1,17 +1,34 @@
 # CreatorLink AI Service
 
+## Status: Planned - Not Currently In Use
+
+**This Python service is planned infrastructure for future AI/vector search features and is NOT currently active in the CreatorLink application.**
+
+The service is designed to:
+- Process messages using AI agents with vector similarity search
+- Use **Qdrant** as an in-memory vector store for semantic search and context retrieval
+- Integrate with Firebase (Firestore and Auth) for data persistence
+- Serve as the AI processing layer when AI features are activated
+
+This infrastructure is ready for future development and testing but is not part of the current production flow.
+
+---
+
 Python FastAPI service that processes messages using AI agents and integrates with Firebase.
 
 ## Architecture
 
-This service receives HTTP requests from Firebase Cloud Functions, processes messages with AI agents, and writes responses back to Firestore.
+This service receives HTTP requests from Firebase Cloud Functions, processes messages with AI agents, and writes responses back to Firestore. It uses Qdrant (an in-memory vector database) for semantic search and context retrieval to enhance AI responses.
 
 ## Setup
 
+**Note:** These instructions are for future development when this service is integrated into the application.
+
 ### Prerequisites
 
-- Python 3.9 or later
+- Python 3.9 or later (Python 3.12 recommended)
 - Firebase emulators running (Auth, Firestore, Functions)
+- Qdrant vector database (runs in-memory mode by default)
 
 ### Installation
 
@@ -74,22 +91,6 @@ curl -X POST http://localhost:8000/process-message \
   }'
 ```
 
-## Project Structure
-
-```
-python-service/
-├── app/
-│   ├── __init__.py          # Package initialization
-│   ├── main.py              # FastAPI application
-│   ├── firebase_client.py   # Firebase Admin SDK client
-│   └── ai_agents.py         # AI agent logic
-├── requirements.txt         # Python dependencies
-├── .env                     # Environment configuration (not committed)
-├── .env.example            # Example environment configuration
-├── run.sh                  # Startup script
-└── README.md               # This file
-```
-
 ## Environment Variables
 
 See `.env.example` for all available configuration options.
@@ -99,3 +100,21 @@ Key variables:
 - `FIREBASE_AUTH_EMULATOR_HOST` - Auth emulator address
 - `HOST` - Server bind address
 - `PORT` - Server port (default: 8000)
+
+## Qdrant Vector Store
+
+The service uses Qdrant for semantic search and context retrieval:
+
+- **Development Mode**: Runs in-memory (`:memory:`) - no external setup needed
+- **Production Mode**: Can connect to a Qdrant server instance
+- **Implementation**: See `QDRANT_IMPLEMENTATION.md` for detailed setup information
+- **Version**: qdrant-client 1.13.0
+- **Python Compatibility**: Fully compatible with Python 3.12
+
+The vector store enables AI agents to:
+- Store message embeddings for semantic search
+- Retrieve relevant context from conversation history
+- Filter results by conversation, user, or custom metadata
+- Provide more informed and contextual AI responses
+
+For technical details on the Qdrant integration, see `/Users/Gauntlet/gauntlet/CreatorLink/python-service/QDRANT_IMPLEMENTATION.md`.
