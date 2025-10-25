@@ -1,0 +1,41 @@
+{
+  "category": "collaboration",
+  "tone": "friendly-organized",
+  "length": "medium",
+  "mechanics": {
+    "capitalization": "proper",
+    "punctuation": "standard",
+    "spellingStyle": "standard"
+  },
+  "vocabulary": {
+    "greetings": {
+      "standard": ["Hey", "Hi"],
+      "alternatives": ["Hey there", "Hi everyone", "Morning"]
+    },
+    "closings": {
+      "standard": ["Thanks", "Cheers"],
+      "alternatives": ["Thanks so much", "Appreciate it", "Talk soon"]
+    },
+    "commonWords": {
+      "what's up": ["what's up"],
+      "you": ["you"],
+      "are": ["are"],
+      "probably": ["probably"],
+      "okay": ["okay", "ok", "sounds good"]
+    },
+    "fillerWords": ["totally", "definitely", "honestly"],
+    "signaturePhrases": ["Let me know what you think", "Happy to help", "Sounds great", "I'm on it"]
+  },
+  "expressiveness": {
+    "emojis": "sometimes",
+    "commonEmojis": ["👍", "😊", "🎉", "✨", "💪"],
+    "exclamations": "sometimes",
+    "multiPunctuation": false,
+    "ellipsis": false
+  },
+  "structure": {
+    "avgLength": "2-3 sentences",
+    "breakIntoMultiple": false,
+    "useLineBreaks": false
+  }
+}

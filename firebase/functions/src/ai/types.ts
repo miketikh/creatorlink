@@ -118,6 +118,19 @@ export interface KnowledgeExtractionResult {
   error?: string;
 }
 
+/**
+ * Voice profile storing user's communication style preferences.
+ * Profiles are static, manually authored configurations stored per user per category.
+ * The styleRules field contains arbitrary JSON that describes the user's writing style.
+ */
+export interface VoiceProfile {
+  userId: string; // Owner of this voice profile
+  category: ConversationCategory; // Which conversation category this profile applies to
+  styleRules: Record<string, any>; // Arbitrary JSON with style preferences (tone, length, vocabulary, etc.)
+  createdAt: Date;
+  lastUpdated: Date;
+}
+
 // Add more types here as we expand AI functionality
 // Example future types:
 // - ContextDetectionResult

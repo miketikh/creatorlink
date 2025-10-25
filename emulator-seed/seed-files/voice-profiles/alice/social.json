@@ -1,0 +1,41 @@
+{
+  "category": "social",
+  "tone": "warm-casual",
+  "length": "short-medium",
+  "mechanics": {
+    "capitalization": "sentence-case",
+    "punctuation": "minimal",
+    "spellingStyle": "casual-shortcuts"
+  },
+  "vocabulary": {
+    "greetings": {
+      "standard": ["hey", "heyy", "hi"],
+      "alternatives": ["heyyy", "hiiii", "what's up", "hey girl"]
+    },
+    "closings": {
+      "standard": ["talk soon", "xo"],
+      "alternatives": ["love you", "miss you", "ttyl", "byeee"]
+    },
+    "commonWords": {
+      "what's up": ["what's up", "wuts up", "sup"],
+      "you": ["you", "u"],
+      "are": ["are", "r"],
+      "probably": ["probably", "prolly", "prob"],
+      "okay": ["okay", "ok", "k", "kk"]
+    },
+    "fillerWords": ["like", "literally", "honestly", "omg", "lol"],
+    "signaturePhrases": ["love that for you", "obsessed", "no way", "same", "mood"]
+  },
+  "expressiveness": {
+    "emojis": "often",
+    "commonEmojis": ["😂", "❤️", "😍", "🥰", "💕", "✨", "🙌", "😊", "💗"],
+    "exclamations": "often",
+    "multiPunctuation": true,
+    "ellipsis": true
+  },
+  "structure": {
+    "avgLength": "1-2 sentences",
+    "breakIntoMultiple": true,
+    "useLineBreaks": false
+  }
+}

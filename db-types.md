@@ -476,6 +476,46 @@ match /knowledge/{factId} {
 
 ---
 
+### Subcollection: `users/{userId}/voiceProfiles/{category}`
+
+**TypeScript Model:** `VoiceProfile` (firebase/functions/src/ai/types.ts)
+
+**Purpose:** Stores user's communication style preferences per conversation category. Profiles are static, manually authored configurations used for AI draft generation.
+
+#### Fields
+
+- `userId: string` - ID of the user this voice profile belongs to
+- `category: ConversationCategory` - Which conversation category this profile applies to (business, collaboration, social, fan)
+- `styleRules: Record<string, any>` - Arbitrary JSON containing style preferences (passed directly to AI as context)
+- `createdAt: Date` - Timestamp when the profile was created (stored as Firestore Timestamp)
+- `lastUpdated: Date` - Timestamp when the profile was last updated (stored as Firestore Timestamp)
+
+#### Relationships
+
+- References: `userId` → `users.id`, `category` → `ConversationCategory` enum
+
+#### Notes
+
+- **Subcollection structure**: Voice profiles are stored as subcollections under each user document
+- **Document ID**: The document ID is the category name (e.g., "business", "social")
+- **Arbitrary JSON**: The `styleRules` field has no enforced structure - it's arbitrary JSON passed to AI for draft generation
+- **Example structure**: See `/Docs/Features/ai-voice/voice_json_example.md` for a sample styleRules format
+- **Static configuration**: Profiles are manually authored, not learned from messages (learning is Phase 5)
+- **Per-category profiles**: Each user can have different writing styles for different conversation categories
+- **Security**: Users can only read/write their own voice profiles
+
+#### Security Rules Requirements
+
+```javascript
+// Users can only access their own voice profiles
+match /users/{userId}/voiceProfiles/{category} {
+  allow read: if request.auth != null && request.auth.uid == userId;
+  allow write: if request.auth != null && request.auth.uid == userId;
+}
+```
+
+---
+
 ## Firebase Realtime Database
 
 ### RTDB: `presence`

@@ -1,0 +1,41 @@
+{
+  "category": "business",
+  "tone": "direct-professional",
+  "length": "short",
+  "mechanics": {
+    "capitalization": "proper",
+    "punctuation": "standard",
+    "spellingStyle": "standard"
+  },
+  "vocabulary": {
+    "greetings": {
+      "standard": ["Hi", "Hello"],
+      "alternatives": ["Hey", "Morning"]
+    },
+    "closings": {
+      "standard": ["Thanks", "Best"],
+      "alternatives": ["Thank you", "-Bob"]
+    },
+    "commonWords": {
+      "what's up": ["what's up"],
+      "you": ["you"],
+      "are": ["are"],
+      "probably": ["probably"],
+      "okay": ["okay", "ok"]
+    },
+    "fillerWords": ["just", "quick"],
+    "signaturePhrases": ["Let me know", "Sounds good", "Got it", "Will do"]
+  },
+  "expressiveness": {
+    "emojis": "rarely",
+    "commonEmojis": ["👍"],
+    "exclamations": "rarely",
+    "multiPunctuation": false,
+    "ellipsis": false
+  },
+  "structure": {
+    "avgLength": "1-2 sentences",
+    "breakIntoMultiple": false,
+    "useLineBreaks": false
+  }
+}

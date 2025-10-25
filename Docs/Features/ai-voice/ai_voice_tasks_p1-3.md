@@ -347,171 +347,96 @@ This phase builds the foundation for capturing and storing factual information f
 
 ## Phase 2: Voice Profile Configuration
 
-**Estimated Time:** 2-3 days
+**Estimated Time:** 1-2 days
 
-This phase implements static voice profile configuration system that stores manually authored communication style profiles for users in different conversation categories (business vs social vs collaboration).
+This phase implements static voice profile configuration system that stores manually authored communication style profiles for users in different conversation categories (business vs social vs collaboration). This is server-side only - iOS integration happens in Phase 4.
 
-### PR 2.1: Voice Profile Schema & Types
+### PR 2.1: Voice Profile Schema & Types ✅ COMPLETED
 
-**Goal:** Define data models for storing static, manually authored communication style profiles in Firestore.
+**Goal:** Define simple data model for storing arbitrary JSON voice profiles in Firestore.
 
 **Tasks:**
-- [ ] Read PRD section on Voice/Style Profiling
-- [ ] Read existing `firebase/functions/src/ai/types.ts` for patterns
-- [ ] Add new types to `firebase/functions/src/ai/types.ts`:
+- [x] Read existing `firebase/functions/src/ai/types.ts` for patterns
+- [x] Add new types to `firebase/functions/src/ai/types.ts`:
   - `VoiceProfile` interface with fields:
     - userId: string
     - category: ConversationCategory
-    - structural: StructuralPatterns (nested object)
-    - language: LanguagePatterns (nested object)
-    - mechanics: MechanicsPatterns (nested object)
-    - commonPatterns: CommonPatterns (nested object)
-    - createdAt: Date (when profile was created)
-    - lastUpdated: Date (when profile was last modified)
-  - `StructuralPatterns` interface:
-    - avgMessageLength: number (average character count)
-    - avgSentencesPerMessage: number
-    - avgParagraphCount: number
-    - usesLineBreaks: boolean
-  - `LanguagePatterns` interface:
-    - formalityScore: number (0.0-1.0, 0=casual, 1=formal)
-    - contractionFrequency: number (0.0-1.0, uses "don't" vs "do not")
-    - technicalTermFrequency: number (0.0-1.0)
-    - slangFrequency: number (0.0-1.0)
-  - `MechanicsPatterns` interface:
-    - capitalizationStyle: "standard" | "lowercase" | "mixed"
-    - punctuationFrequency: number (0.0-1.0)
-    - exclamationUsage: number (per 100 messages)
-    - emojiFrequency: number (per message)
-  - `CommonPatterns` interface:
-    - greetings: string[] (e.g., ["hey", "hi there"])
-    - closings: string[] (e.g., ["thanks", "talk soon"])
-    - responseStarters: string[] (e.g., ["Yeah", "Sure thing"])
-- [ ] Update `db-types.md` with new Firestore subcollection:
+    - styleRules: Record<string, any> (arbitrary JSON with style preferences)
+    - createdAt: Date
+    - lastUpdated: Date
+- [x] Update `db-types.md` with new Firestore subcollection:
   - Subcollection: `users/{userId}/voiceProfiles/{category}`
-  - Document all nested structures
-  - Note that profiles are static, manually authored configurations (not learned)
-  - Add indexes if needed for queries
-- [ ] Export new types from `firebase/functions/src/ai/index.ts`
+  - Document that styleRules is arbitrary JSON passed to AI as context
+  - Note that profiles are static, manually authored configurations
+  - Example styleRules formats (no enforcement, just examples)
+- [x] Export VoiceProfile type from `firebase/functions/src/ai/index.ts`
 
 **What to Test:**
 1. Build TypeScript: `cd firebase/functions && npm run build`
 2. Verify types compile without errors
-3. Review schema matches simplified static profile requirements
-4. Confirm field names follow Firestore conventions
+3. Confirm Record<string, any> allows flexible JSON structure
 
 **Files Changed:**
-- `firebase/functions/src/ai/types.ts` - Add VoiceProfile types
-- `firebase/functions/src/ai/index.ts` - Export new types
+- `firebase/functions/src/ai/types.ts` - Add VoiceProfile type
+- `firebase/functions/src/ai/index.ts` - Export VoiceProfile
 - `/Users/Gauntlet/gauntlet/CreatorLink/db-types.md` - Document voiceProfiles subcollection
 
 **Notes:**
-- Profiles stored per category to allow different styles (business vs social)
-- Static profiles are manually authored, not dynamically learned
-- No metadata fields like confidence, sampleSize, or lastAnalysisAt
-- JSON structure allows flexible updates without schema migrations
+- styleRules is arbitrary JSON - no schema enforcement
+- Content is passed directly to AI as context for draft generation
+- Allows maximum flexibility for different style attributes
+- Can evolve structure without TypeScript changes
 
 ---
 
-### PR 2.2: iOS Voice Profile Model (Read-Only for Phase 2)
+### PR 2.2: Static Profile Seed Script ✅ COMPLETED
 
-**Goal:** Create Swift model for VoiceProfile to enable future iOS features (Phase 4), but no UI integration yet.
-
-**Tasks:**
-- [ ] Read `CreatorLink/Models/Conversation.swift` for Swift model patterns
-- [ ] Create NEW: `/Users/Gauntlet/gauntlet/CreatorLink/CreatorLink/Models/VoiceProfile.swift`:
-  - Define `VoiceProfile` struct conforming to Codable, Hashable
-  - Mirror TypeScript VoiceProfile structure exactly
-  - Define nested structs: StructuralPatterns, LanguagePatterns, MechanicsPatterns, CommonPatterns
-  - Use same field names as TypeScript (critical for Firestore decoding)
-  - Include createdAt and lastUpdated fields
-  - Add CodingKeys enums for all structs
-  - Add init methods for testing
-- [ ] No service integration yet (Phase 4)
-- [ ] Update `db-types.md` with Swift model reference
-
-**What to Test:**
-1. Build iOS project in Xcode - verify no compilation errors
-2. Create test VoiceProfile instance in code
-3. Verify Codable conformance (can encode/decode)
-
-**Files Changed:**
-- NEW: `/Users/Gauntlet/gauntlet/CreatorLink/CreatorLink/Models/VoiceProfile.swift` - Voice profile Swift model
-- `/Users/Gauntlet/gauntlet/CreatorLink/db-types.md` - Add VoiceProfile Swift model reference
-
-**Notes:**
-- No ViewModels or Services yet - just data model
-- Field names MUST match TypeScript exactly
-- No ProfileMetadata struct - profiles are static
-- This enables Phase 4 iOS integration work later
-
----
-
-### PR 2.3: Static Profile Seed Script
-
-**Goal:** Create seed data with static voice profiles for test users to enable testing of draft generation features.
+**Goal:** Create seed data with arbitrary JSON voice profiles for test users.
 
 **Tasks:**
-- [ ] Read existing seed files in `emulator-seed/seed-files/` to understand seed data patterns
-- [ ] Create NEW: `emulator-seed/seed-files/voice-profiles.js`:
-  - Define static voice profiles for test users:
-    - Alice - Business category profile:
-      - structural: {avgMessageLength: 150, avgSentencesPerMessage: 3, avgParagraphCount: 2, usesLineBreaks: true}
-      - language: {formalityScore: 0.8, contractionFrequency: 0.2, technicalTermFrequency: 0.6, slangFrequency: 0.1}
-      - mechanics: {capitalizationStyle: "standard", punctuationFrequency: 0.9, exclamationUsage: 2, emojiFrequency: 0.1}
-      - commonPatterns: {greetings: ["Good morning", "Hello"], closings: ["Best regards", "Thank you"], responseStarters: ["I appreciate", "Certainly"]}
-    - Alice - Social category profile:
-      - structural: {avgMessageLength: 80, avgSentencesPerMessage: 2, avgParagraphCount: 1, usesLineBreaks: false}
-      - language: {formalityScore: 0.3, contractionFrequency: 0.8, technicalTermFrequency: 0.2, slangFrequency: 0.4}
-      - mechanics: {capitalizationStyle: "lowercase", punctuationFrequency: 0.5, exclamationUsage: 15, emojiFrequency: 1.5}
-      - commonPatterns: {greetings: ["hey", "hi there"], closings: ["talk soon", "ttyl"], responseStarters: ["yeah", "omg", "lol"]}
-    - Bob - Business category profile:
-      - structural: {avgMessageLength: 120, avgSentencesPerMessage: 2, avgParagraphCount: 1, usesLineBreaks: false}
-      - language: {formalityScore: 0.6, contractionFrequency: 0.5, technicalTermFrequency: 0.5, slangFrequency: 0.2}
-      - mechanics: {capitalizationStyle: "standard", punctuationFrequency: 0.7, exclamationUsage: 5, emojiFrequency: 0.3}
-      - commonPatterns: {greetings: ["Hi", "Hey"], closings: ["Thanks", "Cheers"], responseStarters: ["Sure", "Got it"]}
-    - Bob - Social category profile:
-      - structural: {avgMessageLength: 60, avgSentencesPerMessage: 1, avgParagraphCount: 1, usesLineBreaks: false}
-      - language: {formalityScore: 0.2, contractionFrequency: 0.9, technicalTermFrequency: 0.1, slangFrequency: 0.7}
-      - mechanics: {capitalizationStyle: "lowercase", punctuationFrequency: 0.3, exclamationUsage: 20, emojiFrequency: 2.0}
-      - commonPatterns: {greetings: ["yo", "sup"], closings: ["later", "peace"], responseStarters: ["lmao", "nah", "fr"]}
+- [x] Read existing seed files in `emulator-seed/seed-files/` to understand seed data patterns
+- [x] Create NEW: `emulator-seed/seed-files/voice-profiles.js`:
+  - Define arbitrary JSON voice profiles for test users:
+    - Alice - Business, Collaboration, Social (professional-friendly → warm-casual)
+    - Bob - Business, Collaboration, Social (direct-professional → casual-laid-back)
+    - David - Business, Collaboration, Social (formal-detailed → relaxed-brief)
   - Export function `seedVoiceProfiles(db, users)` that:
+    - Reads JSON files from voice-profiles/{user}/{category}.json
     - Stores profiles in `users/{userId}/voiceProfiles/{category}` subcollection
     - Uses Firestore FieldValue.serverTimestamp() for createdAt and lastUpdated
-    - Handles both business and social categories for each user
-- [ ] Update `emulator-seed/seed.js`:
+    - Handles business, collaboration, and social categories for Alice, Bob, and David
+- [x] Update `emulator-seed/seed-files/generic.js`:
   - Import seedVoiceProfiles function
   - Call seedVoiceProfiles after user creation
   - Add logging for voice profile seeding
-- [ ] Test seed script runs without errors
+- [x] Test seed script runs without errors
 
 **What to Test:**
 1. Run seed script: `cd emulator-seed && node seed.js`
 2. Verify voice profiles created in Firestore emulator
 3. Check profiles exist at correct path: `users/{userId}/voiceProfiles/{category}`
-4. Verify all profile fields populated correctly
+4. Verify styleRules contains arbitrary JSON
 5. Confirm createdAt and lastUpdated timestamps set
-6. Test with both Alice and Bob users
 
 **Files Changed:**
 - NEW: `emulator-seed/seed-files/voice-profiles.js` - Voice profile seed data
 - `emulator-seed/seed.js` - Import and call voice profile seeding
 
 **Notes:**
-- Static profiles provide realistic test data for draft generation
-- Alice profiles demonstrate formal business vs casual social styles
-- Bob profiles demonstrate moderate business vs very casual social styles
-- These profiles enable end-to-end testing without running LLM analysis
+- styleRules JSON can have any structure - no schema enforcement
+- Examples show different approaches (some detailed, some simple)
+- AI will interpret the JSON as context for draft generation
+- Easy to modify and experiment with different profile formats
 
 ---
 
-### PR 2.4: Profile Loader Utility
+### PR 2.3: Profile Loader Utility ✅ COMPLETED
 
 **Goal:** Create helper function to load static voice profiles from Firestore for use in draft generation.
 
 **Tasks:**
-- [ ] Read `firebase/functions/src/ai/lib/response-writer.ts` for Firestore read patterns
-- [ ] Create NEW: `firebase/functions/src/ai/lib/voice-profile-loader.ts`:
+- [x] Read `firebase/functions/src/ai/lib/response-writer.ts` for Firestore read patterns
+- [x] Create NEW: `firebase/functions/src/ai/lib/voice-profile-loader.ts`:
   - Import VoiceProfile type from ai/types
   - Implement `loadVoiceProfile(userId: string, category: ConversationCategory): Promise<VoiceProfile | null>`
   - Fetch document from `users/{userId}/voiceProfiles/{category}`
@@ -520,7 +445,7 @@ This phase implements static voice profile configuration system that stores manu
   - Add error handling for Firestore read failures
   - Add logging for debugging (profile found/not found)
   - Use admin.firestore() instance
-- [ ] Export function from `firebase/functions/src/ai/index.ts`
+- [x] Export function from `firebase/functions/src/ai/index.ts`
 
 **What to Test:**
 1. Build project: `cd firebase/functions && npm run build`
@@ -922,9 +847,9 @@ These questions from the PRD must be resolved during implementation:
 - [ ] Cloud Function runs without errors on message creation
 
 **Phase 2 Complete:**
-- [ ] Voice profile schema and types defined in TypeScript and Swift
+- [ ] Voice profile schema and types defined in TypeScript (with arbitrary JSON styleRules)
 - [ ] Seed script creates static voice profiles for test users (Alice, Bob)
-- [ ] Profiles capture formality, common phrases, emoji usage, structural patterns
+- [ ] Profiles contain styleRules JSON describing user's communication preferences
 - [ ] Profile loader utility successfully retrieves profiles from Firestore
 
 **Phase 3 Complete:**
@@ -932,7 +857,6 @@ These questions from the PRD must be resolved during implementation:
 - [ ] Drafts include knowledge facts + voice style
 - [ ] Drafts update when new messages arrive
 - [ ] Draft quality validated with test scenarios (sounds like user)
-- [ ] iOS models exist for VoiceProfile and MessageDraft
 
 **Technical Quality:**
 - [ ] All TypeScript code compiles without errors
@@ -949,11 +873,12 @@ These questions from the PRD must be resolved during implementation:
 Phase 4 and Phase 5 will be documented in a separate task file:
 
 **Phase 4: iOS UI Integration**
+- iOS VoiceProfile and MessageDraft models
 - AI response mode toggle in settings
 - Draft display in conversation list
 - Draft preview/editor in chat view
 - Visual indicators (AI DRAFT badge)
-- Learning progress indicator
+- Draft auto-load into message input
 
 **Phase 5: Refinement & Optimization**
 - Learning from user edits

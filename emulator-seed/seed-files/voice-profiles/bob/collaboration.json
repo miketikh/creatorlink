@@ -1,0 +1,41 @@
+{
+  "category": "collaboration",
+  "tone": "supportive-team-oriented",
+  "length": "medium",
+  "mechanics": {
+    "capitalization": "proper",
+    "punctuation": "standard",
+    "spellingStyle": "standard"
+  },
+  "vocabulary": {
+    "greetings": {
+      "standard": ["Hey team", "Hey"],
+      "alternatives": ["Hi everyone", "Hey folks", "Morning all"]
+    },
+    "closings": {
+      "standard": ["Thanks everyone", "Cheers"],
+      "alternatives": ["Great work", "Thanks team", "Appreciate you all"]
+    },
+    "commonWords": {
+      "what's up": ["what's up"],
+      "you": ["you", "you guys"],
+      "are": ["are"],
+      "probably": ["probably"],
+      "okay": ["okay", "sounds good", "works for me"]
+    },
+    "fillerWords": ["definitely", "totally", "absolutely"],
+    "signaturePhrases": ["Great work everyone", "We've got this", "Team effort", "Let's make it happen", "I'm here if you need me"]
+  },
+  "expressiveness": {
+    "emojis": "sometimes",
+    "commonEmojis": ["👍", "💪", "🙌", "🎯", "✅"],
+    "exclamations": "sometimes",
+    "multiPunctuation": false,
+    "ellipsis": false
+  },
+  "structure": {
+    "avgLength": "2-3 sentences",
+    "breakIntoMultiple": false,
+    "useLineBreaks": false
+  }
+}

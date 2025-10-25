@@ -1,0 +1,41 @@
+{
+  "category": "social",
+  "tone": "casual-laid-back",
+  "length": "short",
+  "mechanics": {
+    "capitalization": "lowercase",
+    "punctuation": "minimal",
+    "spellingStyle": "casual-shortcuts"
+  },
+  "vocabulary": {
+    "greetings": {
+      "standard": ["yo", "hey", "sup"],
+      "alternatives": ["what's good", "ayy", "yooo"]
+    },
+    "closings": {
+      "standard": ["later", "peace"],
+      "alternatives": ["ttyl", "catch ya later", "see ya"]
+    },
+    "commonWords": {
+      "what's up": ["sup", "wassup", "what's good"],
+      "you": ["u", "ya"],
+      "are": ["r"],
+      "probably": ["prolly", "prob"],
+      "okay": ["k", "cool", "bet"]
+    },
+    "fillerWords": ["bro", "dude", "lol", "haha", "ngl"],
+    "signaturePhrases": ["that's wild", "no cap", "for real", "facts", "bet", "lowkey", "highkey"]
+  },
+  "expressiveness": {
+    "emojis": "often",
+    "commonEmojis": ["😂", "🔥", "💯", "👊", "🤙", "😎", "💀", "⚡"],
+    "exclamations": "often",
+    "multiPunctuation": true,
+    "ellipsis": false
+  },
+  "structure": {
+    "avgLength": "1 sentence",
+    "breakIntoMultiple": true,
+    "useLineBreaks": false
+  }
+}

@@ -23,6 +23,7 @@ const {
   createMessages,
   generateTagsByUser
 } = require('../utils');
+const seedVoiceProfiles = require('./voice-profiles');
 
 async function seedGeneric(auth, db) {
   console.log('🌱 Starting generic seed process...\n');
@@ -34,6 +35,9 @@ async function seedGeneric(auth, db) {
   // Step 2: Create Firestore user profiles
   await createUserProfiles(db, ALL_USERS, userIds);
   await createAIUserProfile(db, AI_USER);
+
+  // Step 2.5: Seed voice profiles for Alice, Bob, and David
+  await seedVoiceProfiles(db, userIds);
 
   // Map users for easy reference (Alice and Bob are always first two)
   const [alice, bob, carol, david, emma, frank, grace, henry, iris, jack] = userIds;

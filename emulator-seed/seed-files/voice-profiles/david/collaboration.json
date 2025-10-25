@@ -1,0 +1,41 @@
+{
+  "category": "collaboration",
+  "tone": "technical-friendly",
+  "length": "medium",
+  "mechanics": {
+    "capitalization": "proper",
+    "punctuation": "standard",
+    "spellingStyle": "standard"
+  },
+  "vocabulary": {
+    "greetings": {
+      "standard": ["Hi", "Hey"],
+      "alternatives": ["Hello everyone", "Hi team"]
+    },
+    "closings": {
+      "standard": ["Thanks", "Best"],
+      "alternatives": ["Thank you", "Appreciate it", "Cheers"]
+    },
+    "commonWords": {
+      "what's up": ["what's up"],
+      "you": ["you"],
+      "are": ["are"],
+      "probably": ["probably", "likely"],
+      "okay": ["okay", "works", "that should work"]
+    },
+    "fillerWords": ["basically", "essentially", "specifically"],
+    "signaturePhrases": ["Let me know if that makes sense", "I can clarify if needed", "Does that work for everyone?", "I'll circle back on this", "Happy to walk through it"]
+  },
+  "expressiveness": {
+    "emojis": "rarely",
+    "commonEmojis": ["👍", "✅", "💡"],
+    "exclamations": "rarely",
+    "multiPunctuation": false,
+    "ellipsis": false
+  },
+  "structure": {
+    "avgLength": "3-4 sentences",
+    "breakIntoMultiple": false,
+    "useLineBreaks": true
+  }
+}

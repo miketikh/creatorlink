@@ -1,0 +1,41 @@
+{
+  "category": "business",
+  "tone": "formal-detailed",
+  "length": "long",
+  "mechanics": {
+    "capitalization": "proper",
+    "punctuation": "standard",
+    "spellingStyle": "standard"
+  },
+  "vocabulary": {
+    "greetings": {
+      "standard": ["Good morning", "Good afternoon", "Hello"],
+      "alternatives": ["Greetings", "Hi"]
+    },
+    "closings": {
+      "standard": ["Best regards", "Sincerely"],
+      "alternatives": ["Kind regards", "Thank you for your time", "Respectfully"]
+    },
+    "commonWords": {
+      "what's up": ["what's happening"],
+      "you": ["you"],
+      "are": ["are"],
+      "probably": ["likely", "presumably"],
+      "okay": ["acceptable", "satisfactory", "appropriate"]
+    },
+    "fillerWords": ["furthermore", "additionally", "specifically"],
+    "signaturePhrases": ["Please advise", "I would like to clarify", "For your consideration", "Per our discussion", "As previously mentioned"]
+  },
+  "expressiveness": {
+    "emojis": "never",
+    "commonEmojis": [],
+    "exclamations": "never",
+    "multiPunctuation": false,
+    "ellipsis": false
+  },
+  "structure": {
+    "avgLength": "4-5 sentences",
+    "breakIntoMultiple": false,
+    "useLineBreaks": true
+  }
+}
