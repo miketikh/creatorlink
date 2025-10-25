@@ -442,10 +442,15 @@ struct ChatDetailView: View {
                 }
 
                 // Scroll to saved position or bottom AFTER messages load
-                if let savedPos = savedScrollPosition {
-                    proxy.scrollTo(savedPos, anchor: .top)
-                } else if let lastMessage = viewModel.messages.last {
-                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                // Small delay to ensure ScrollView is fully rendered
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
+
+                await MainActor.run {
+                    if let savedPos = savedScrollPosition {
+                        proxy.scrollTo(savedPos, anchor: .top)
+                    } else if let lastMessage = viewModel.messages.last {
+                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                    }
                 }
 
                 // Mark messages as read after initial load
