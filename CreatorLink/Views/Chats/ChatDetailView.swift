@@ -611,7 +611,9 @@ struct ChatDetailView: View {
                 // Buttons row
                 HStack(spacing: 8) {
                     Button {
-                        useDraft(draft: draft)
+                        Task {
+                            await useDraft(draft: draft)
+                        }
                     } label: {
                         Text("Use")
                             .font(.caption)
@@ -659,15 +661,22 @@ struct ChatDetailView: View {
         )
     }
 
-    private func useDraft(draft: MessageDraft) {
-        // Copy draft text into the message input field
-        messageText = draft.text
-        // Focus the input field so user can edit immediately
+    @MainActor
+    private func useDraft(draft: MessageDraft) async {
+        // Store the draft text before dismissing
+        let draftText = draft.text
+
+        // Dismiss the draft banner FIRST
+        await viewModel.dismissDraft()
+
+        // Focus the empty field first (cursor will be at position 0)
         isInputFocused = true
-        // Dismiss the draft banner (without clearing text)
-        Task {
-            await viewModel.dismissDraft()
-        }
+
+        // Small delay to ensure focus is set before text is added
+        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+
+        // THEN set the text (cursor stays at beginning)
+        messageText = draftText
     }
 
     private func dismissDraft() async {
