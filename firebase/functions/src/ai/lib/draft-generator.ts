@@ -4,7 +4,6 @@
  * knowledge retrieval, voice profiles, and conversation context.
  */
 
-import * as logger from "firebase-functions/logger";
 import {getOpenAIClient} from "../client";
 import {
   DraftGenerationResult,
@@ -14,6 +13,7 @@ import {
 import {ConversationMessage, fetchConversationMessages} from "./message-fetcher";
 import {loadVoiceProfile} from "./voice-profile-loader";
 import {searchKnowledgeWithScores} from "./knowledge-retriever";
+import {testLog} from "./test-logger";
 
 /**
  * Generate a personalized draft response for a user.
@@ -35,12 +35,16 @@ export async function generateDraft(
   incomingMessages: ConversationMessage[],
   category: ConversationCategory
 ): Promise<DraftGenerationResult> {
-  const startTime = Date.now();
-
   try {
-    logger.info("Starting draft generation", {
+    // logger.info("Starting draft generation", {
+    //   userId,
+    //   conversationId,
+    //   category,
+    //   incomingMessageCount: incomingMessages.length,
+    // });
+
+    testLog("  🎨 GENERATING DRAFT", {
       userId,
-      conversationId,
       category,
       incomingMessageCount: incomingMessages.length,
     });
@@ -48,15 +52,18 @@ export async function generateDraft(
     // Fetch voice profile for user + category
     const voiceProfile = await loadVoiceProfile(userId, category);
     if (!voiceProfile) {
-      logger.warn("Cannot generate draft: no voice profile", {
-        userId,
-        category,
-      });
+      // logger.warn("Cannot generate draft: no voice profile", {
+      //   userId,
+      //   category,
+      // });
       return {
         success: false,
         reason: "No voice profile available for user and category",
       };
     }
+
+    // Fetch conversation history for context-aware query transformation
+    const conversationHistory = await fetchConversationMessages(conversationId, 10);
 
     // Extract latest message(s) as the prompt to respond to
     const latestMessages = incomingMessages.slice(-2); // Last 2 messages
@@ -64,12 +71,27 @@ export async function generateDraft(
       .map(msg => msg.text)
       .join(" ");
 
-    // Search knowledge base for relevant facts
-    const knowledgeResults = await searchKnowledgeWithScores(promptText, userId, 5);
-    const relevantKnowledge = knowledgeResults.filter(result => result.similarity > 0.7);
+    // Search knowledge base for relevant facts with conversation context
+    // Note: Threshold 0.45 calibrated for text-embedding-3-small model
+    const knowledgeResults = await searchKnowledgeWithScores(promptText, userId, 5, conversationHistory);
+    const relevantKnowledge = knowledgeResults.filter(result => result.similarity > 0.45);
 
-    // Fetch last 10 messages for conversation context
-    const conversationHistory = await fetchConversationMessages(conversationId, 10);
+    testLog("  📚 Knowledge retrieval complete", {
+      userId,
+      queryText: promptText.substring(0, 100) + (promptText.length > 100 ? '...' : ''),
+      totalResults: knowledgeResults.length,
+      relevantResults: relevantKnowledge.length,
+      topFacts: relevantKnowledge.slice(0, 5).map(r => ({
+        text: r.fact.text.substring(0, 60) + (r.fact.text.length > 60 ? '...' : ''),
+        similarity: r.similarity.toFixed(3),
+        passedThreshold: r.similarity > 0.45,
+      })),
+      // Show below-threshold results for debugging
+      belowThresholdSample: knowledgeResults.filter(r => r.similarity <= 0.45).slice(0, 3).map(r => ({
+        text: r.fact.text.substring(0, 60) + (r.fact.text.length > 60 ? '...' : ''),
+        similarity: r.similarity.toFixed(3),
+      })),
+    });
 
     // Build LLM prompt
     const openai = getOpenAIClient();
@@ -86,6 +108,8 @@ export async function generateDraft(
         relevantKnowledge
           .map((result, index) => `${index + 1}. ${result.fact.text} (relevance: ${result.similarity.toFixed(2)})`)
           .join("\n");
+    } else {
+      knowledgeContext = "\nRELEVANT KNOWLEDGE FACTS:\n(No knowledge facts available - do not make up specific details)";
     }
 
     // Build voice profile context
@@ -99,11 +123,18 @@ ${styleRulesText}
 YOUR TASK:
 1. Write a response that sounds EXACTLY like this user would write it
 2. Match their tone, formality, word choice, emoji usage, and sentence structure
-3. Incorporate relevant knowledge facts naturally (if provided)
+3. Use ONLY information from the "RELEVANT KNOWLEDGE FACTS" section (if provided)
 4. Keep the response authentic and conversational
 5. Return ONLY the draft text - no explanations or meta-commentary
 
-IMPORTANT:
+CRITICAL RULES - NEVER BREAK THESE:
+- ONLY use facts explicitly listed in "RELEVANT KNOWLEDGE FACTS" section
+- DO NOT make up, invent, or fabricate ANY personal details (names, numbers, dates, etc.)
+- DO NOT add specific information that isn't in the knowledge facts
+- If no knowledge facts are provided, keep responses generic or acknowledge not having specific info
+- If asked about something with no knowledge facts, respond naturally without making up details
+
+STYLE MATCHING:
 - The response should be written AS IF the user wrote it themselves
 - Match their communication style precisely (formal/casual, brief/detailed, etc.)
 - Use their typical phrases, greetings, and sign-offs
@@ -119,12 +150,11 @@ ${latestMessages.map(msg => `${msg.senderId}: ${msg.text}`).join("\n")}
 
 Write a response as the user (${userId}) would write it, using their voice profile style.`;
 
-    logger.info("Calling OpenAI for draft generation", {
+    testLog("  🤖 Calling OpenAI to generate draft", {
       userId,
-      conversationId,
       model: "gpt-4o",
-      knowledgeFactsCount: relevantKnowledge.length,
-      contextMessagesCount: conversationHistory.length,
+      knowledgeFactsUsed: relevantKnowledge.length,
+      contextMessages: conversationHistory.length,
     });
 
     const completion = await openai.chat.completions.create({
@@ -140,7 +170,7 @@ Write a response as the user (${userId}) would write it, using their voice profi
     const draftText = completion.choices[0]?.message?.content;
 
     if (!draftText) {
-      logger.warn("Empty response from OpenAI draft generation");
+      // logger.warn("Empty response from OpenAI draft generation");
       return {
         success: false,
         reason: "Empty response from AI model",
@@ -158,13 +188,20 @@ Write a response as the user (${userId}) would write it, using their voice profi
       updatedAt: now,
     };
 
-    const duration = Date.now() - startTime;
-    logger.info("Draft generation complete", {
+    // const duration = Date.now() - startTime;
+    // logger.info("Draft generation complete", {
+    //   userId,
+    //   conversationId,
+    //   draftLength: draftText.length,
+    //   knowledgeFactsFound: relevantKnowledge.length,
+    //   durationMs: duration,
+    // });
+
+    testLog("  ✅ Draft text generated", {
       userId,
-      conversationId,
+      draftPreview: draftText.substring(0, 80) + (draftText.length > 80 ? '...' : ''),
       draftLength: draftText.length,
-      knowledgeFactsFound: relevantKnowledge.length,
-      durationMs: duration,
+      knowledgeFactsUsed: relevantKnowledge.length,
     });
 
     return {
@@ -174,14 +211,14 @@ Write a response as the user (${userId}) would write it, using their voice profi
     };
 
   } catch (error) {
-    const duration = Date.now() - startTime;
-    logger.error("Draft generation failed", {
-      userId,
-      conversationId,
-      category,
-      error: error instanceof Error ? error.message : String(error),
-      durationMs: duration,
-    });
+    // const duration = Date.now() - startTime;
+    // logger.error("Draft generation failed", {
+    //   userId,
+    //   conversationId,
+    //   category,
+    //   error: error instanceof Error ? error.message : String(error),
+    //   durationMs: duration,
+    // });
 
     return {
       success: false,

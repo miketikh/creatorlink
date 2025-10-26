@@ -1,28 +1,44 @@
 /**
- * Knowledge Extraction Helper
- * Uses OpenAI GPT-4o-mini to extract normalized, self-contained facts from user messages.
+ * Knowledge Extraction from User Messages
  *
- * Key Design Principles:
- * - Facts must be self-contained (readable without conversation context)
- * - Facts should be ABOUT the user (not about others)
- * - Uses last 5 messages as context to handle multi-message answers
- * - Normalizes pronouns and incomplete statements into complete facts
+ * PURPOSE: Extract factual information ABOUT the message sender and store it in their knowledge base.
  *
- * Examples:
- * - Q: "Do you have pets?" A: "Yes, one dog" → "User has one dog"
- * - Q: "What's his name?" A: "Max" → "User's dog is named Max"
- * - "I charge $500/hour for consulting" → "User charges $500/hour for consulting"
- * - "I'm vegan" → "User is vegan"
- * - "How are you doing?" → No facts (just greeting)
+ * IMPORTANT DISTINCTION:
+ * - This extracts facts ABOUT the sender (the person who sent the message)
+ * - NOT about the recipient or other people mentioned
+ *
+ * Example Scenario:
+ * - Alice says: "I have three pets"
+ * - Knowledge extraction stores about ALICE: "User has three pets"
+ *
+ * Another Example:
+ * - Bob says: "I have three dogs, what about you?"
+ * - Knowledge extraction stores about BOB: "User has three dogs"
+ * - (The question part is ignored here - that's handled by query-transformer.ts)
+ *
+ * Uses last 5 messages as context to handle:
+ * - Incomplete answers: Q: "Do you have pets?" A: "Yes, one dog" → "User has one dog"
+ * - Follow-up questions: Q: "What's his name?" A: "Max" → "User's dog is named Max"
+ *
+ * Normalization Format (shared with query-transformer.ts):
+ * - Use "User" as subject (represents the sender whose facts we're storing)
+ * - Remove pronouns, use third person
+ * - Present tense
+ * - Concise and factual
+ * - Self-contained (readable without conversation context)
  */
 
 import * as logger from "firebase-functions/logger";
 import {getOpenAIClient} from "../client";
 import {KnowledgeExtractionResult} from "../types";
 import {ConversationMessage} from "./message-fetcher";
+import {testLog} from "./test-logger";
 
 /**
  * Extract knowledge facts from a message using recent conversation context.
+ *
+ * This function focuses ONLY on extracting facts ABOUT the sender.
+ * It uses conversation context to normalize incomplete answers into complete facts.
  *
  * @param messageText - The current message text to analyze
  * @param recentMessages - Last 5 messages for context (oldest first)
@@ -34,14 +50,12 @@ export async function extractKnowledge(
   recentMessages: ConversationMessage[],
   senderId: string
 ): Promise<KnowledgeExtractionResult> {
-  const startTime = Date.now();
-
   try {
-    logger.info("Starting knowledge extraction", {
-      messageLength: messageText.length,
-      contextMessages: recentMessages.length,
-      senderId,
-    });
+    // logger.info("Starting knowledge extraction", {
+    //   messageLength: messageText.length,
+    //   contextMessages: recentMessages.length,
+    //   senderId,
+    // });
 
     const openai = getOpenAIClient();
 
@@ -54,31 +68,45 @@ export async function extractKnowledge(
       })
       .join("\n");
 
-    const systemPrompt = `You are a fact extraction assistant. Your job is to extract factual information ABOUT the user from their messages.
+    const systemPrompt = `You are a fact extraction assistant for personal knowledge storage.
 
-CRITICAL RULES:
-1. **Self-contained facts**: Each fact must be a complete, standalone sentence that makes sense without reading the conversation
-2. **Normalize facts**: Convert pronouns, incomplete answers, and context-dependent statements into complete facts
-3. **About the user**: Only extract facts ABOUT the user themselves (not facts they mention about others)
-4. **Factual only**: Ignore greetings, questions, opinions, and general conversation
-5. **Use context**: Use the conversation history to understand incomplete answers (e.g., "Yes" or "Max" as answers to questions)
+YOUR PURPOSE:
+Extract factual information ABOUT the user (message sender) from their messages.
+Store facts in their knowledge base for future retrieval.
 
-NORMALIZATION EXAMPLES:
-- Q: "Do you have pets?" A: "Yes, one dog" → Extract: "User has one dog"
-- Q: "What's his name?" A: "Max" → Extract: "User's dog is named Max"
-- Q: "How old?" A: "He's 3" → Extract: "User's dog Max is three years old"
-- "I charge $500/hour" → Extract: "User charges $500/hour for consulting"
-- "I'm vegan" → Extract: "User is vegan"
-- "My wife's name is Sarah" → Extract: "User's wife is named Sarah"
+FORMATTING RULES (match query transformation format):
+- Use "User" as subject (represents the sender whose facts we're storing)
+- Convert to complete, self-contained statements
+- Remove pronouns, use third person
+- Use present tense
+- Be concise and factual
 
-IGNORE THESE:
-- Greetings: "How are you?", "What's up?", "Good morning"
-- Questions asking others
-- General conversation: "That's interesting", "I agree"
-- Opinions about topics (unless about user's preference/belief)
+EXAMPLES:
+Input: "I have three pets"
+Output: "User has three pets"
+
+Input: Q: "Do you have pets?" A: "Yes, one dog"
+Output: "User has one dog"
+
+Input: Q: "What's his name?" A: "Max"
+Output: "User's dog is named Max"
+
+Input: "I charge $500/hour for consulting"
+Output: "User charges $500/hour for consulting"
+
+Input: "I'm staying in tonight, do you have any plans?"
+Output: "User is staying in tonight"
+
+IGNORE:
+- Greetings and pleasantries
+- Questions the user asks others
+- General conversational filler
+- Opinions about topics (unless it's a personal preference/belief)
+
+KEY PRINCIPLE:
+Only extract facts ABOUT the user themselves, not about others they mention.
 
 Respond with JSON only: {"facts": [{"text": "normalized fact text"}]}
-
 If no facts found, return: {"facts": []}`;
 
     const userPrompt = `CONVERSATION CONTEXT (last 5 messages):
@@ -119,15 +147,15 @@ Extract all factual information ABOUT the user from the current message, using t
       updatedAt: new Date(),
     }));
 
-    const duration = Date.now() - startTime;
-    logger.info("Knowledge extraction complete", {
-      factsExtracted: facts.length,
-      durationMs: duration,
-      senderId,
-    });
+    // logger.info("Knowledge extraction complete", {
+    //   factsExtracted: facts.length,
+    //   durationMs: Date.now() - startTime,
+    //   senderId,
+    // });
 
     if (facts.length > 0) {
-      logger.info("Extracted facts:", {
+      testLog("📝 EXTRACTED FACTS", {
+        userId: senderId,
         facts: facts.map(f => f.text),
       });
     }
@@ -138,12 +166,11 @@ Extract all factual information ABOUT the user from the current message, using t
     };
 
   } catch (error) {
-    const duration = Date.now() - startTime;
-    logger.error("Knowledge extraction failed", {
-      error: error instanceof Error ? error.message : String(error),
-      durationMs: duration,
-      senderId,
-    });
+    // logger.error("Knowledge extraction failed", {
+    //   error: error instanceof Error ? error.message : String(error),
+    //   durationMs: Date.now() - startTime,
+    //   senderId,
+    // });
 
     return {
       success: false,

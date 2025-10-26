@@ -12,9 +12,13 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {KnowledgeFact} from "../types";
 import {generateEmbedding} from "./embedding-generator";
+import {testLog} from "./test-logger";
+import {transformQuery} from "./query-transformer";
+import {ConversationMessage} from "./message-fetcher";
 
-// Minimum similarity threshold for results (0.7 = fairly relevant)
-const MIN_SIMILARITY_THRESHOLD = 0.7;
+// Minimum similarity threshold for results (0.45 = calibrated for text-embedding-3-small)
+// Note: text-embedding-3-small produces lower scores than ada-002 (0.45 vs 0.7)
+const MIN_SIMILARITY_THRESHOLD = 0.45;
 
 /**
  * Search for relevant knowledge facts using semantic vector search.
@@ -128,27 +132,45 @@ export async function searchKnowledge(
  * Search for knowledge facts and return with similarity scores.
  * This is a helper that manually calculates cosine similarity for each result.
  *
+ * MULTI-QUERY SUPPORT:
+ * - Generates 1-3 queries from the input message
+ * - Searches for each query separately
+ * - Merges results using deduplication (keeps highest similarity per fact)
+ * - Returns combined ranked results
+ *
  * @param queryText - The query text to search for
  * @param userId - User ID to filter results to
  * @param topK - Number of top results to return (default: 5)
+ * @param conversationHistory - Recent conversation messages for context (default: empty)
  * @returns Array of facts with similarity scores
  */
 export async function searchKnowledgeWithScores(
   queryText: string,
   userId: string,
-  topK: number = 5
+  topK: number = 5,
+  conversationHistory: ConversationMessage[] = []
 ): Promise<Array<{fact: KnowledgeFact; similarity: number}>> {
   try {
-    logger.info("Starting knowledge search with scores", {
+    logger.info("Starting knowledge search with scores (multi-query)", {
       queryLength: queryText.length,
       userId,
       topK,
     });
 
-    // Generate embedding for query
-    const queryEmbedding = await generateEmbedding(queryText);
+    // Transform query into normalized fact format for better semantic matching
+    // Example: "Do you have pets?" → ["User has pets"]
+    // Example: "I like dancing, do you have pets?" → ["User has pets", "User likes dancing"]
+    // Uses conversation history for context (e.g., "u?" → ["User has pets"] if discussing pets)
+    const transformedQueries = await transformQuery(queryText, conversationHistory);
 
-    // Get all facts for user (we'll calculate similarity manually)
+    testLog("🔍 MULTI-QUERY SEARCH: Starting", {
+      userId,
+      originalQuery: queryText.substring(0, 100),
+      queriesGenerated: transformedQueries.length,
+      queries: transformedQueries,
+    });
+
+    // Get all facts for user once (we'll search against them for each query)
     const db = admin.firestore();
     const snapshot = await db.collection("knowledge")
       .where("userId", "==", userId)
@@ -156,58 +178,136 @@ export async function searchKnowledgeWithScores(
 
     if (snapshot.empty) {
       logger.info("No knowledge facts found for user", {userId});
+
+      // Diagnostic: Query ALL documents to check if any exist
+      const allDocsSnapshot = await db.collection("knowledge").limit(10).get();
+
+      testLog("🚨 KNOWLEDGE RETRIEVAL: ZERO results for userId", {
+        userId,
+        originalQuery: queryText.substring(0, 100),
+        queries: transformedQueries,
+        totalDocsInCollection: allDocsSnapshot.size,
+        sampleDocs: allDocsSnapshot.docs.slice(0, 5).map(d => ({
+          docId: d.id,
+          userId: d.data().userId,
+          text: d.data().text?.substring(0, 50),
+        })),
+      });
+
       return [];
     }
 
-    // Calculate similarity for each fact
-    const resultsWithScores: Array<{fact: KnowledgeFact; similarity: number}> = [];
+    testLog("✅ KNOWLEDGE RETRIEVAL: Found documents for userId", {
+      userId,
+      originalQuery: queryText.substring(0, 100),
+      queries: transformedQueries,
+      totalDocuments: snapshot.size,
+      sampleFacts: snapshot.docs.slice(0, 3).map(d => ({
+        docId: d.id,
+        text: d.data().text.substring(0, 50),
+      })),
+    });
 
-    for (const doc of snapshot.docs) {
-      const data = doc.data();
+    // Process each query and collect results
+    const allQueryResults: Array<{
+      query: string;
+      results: Array<{fact: KnowledgeFact; similarity: number}>;
+    }> = [];
 
-      // Extract embedding
-      let embedding: number[];
-      if (data.embedding && typeof data.embedding.toArray === 'function') {
-        embedding = data.embedding.toArray();
-      } else if (Array.isArray(data.embedding)) {
-        embedding = data.embedding;
-      } else {
-        continue; // Skip facts without valid embeddings
+    for (const query of transformedQueries) {
+      // Generate embedding for this query
+      const queryEmbedding = await generateEmbedding(query);
+
+      logger.info("🔍 Processing query", {
+        userId,
+        query: query.substring(0, 100),
+        embeddingDimensions: queryEmbedding.length,
+      });
+
+      // Calculate similarity for each fact
+      const queryResults: Array<{fact: KnowledgeFact; similarity: number}> = [];
+
+      for (const doc of snapshot.docs) {
+        const data = doc.data();
+
+        // Extract embedding
+        let embedding: number[];
+        if (data.embedding && typeof data.embedding.toArray === 'function') {
+          embedding = data.embedding.toArray();
+        } else if (Array.isArray(data.embedding)) {
+          embedding = data.embedding;
+        } else {
+          continue; // Skip facts without valid embeddings
+        }
+
+        // Calculate cosine similarity
+        const similarity = cosineSimilarity(queryEmbedding, embedding);
+
+        // Only include if above threshold
+        if (similarity >= MIN_SIMILARITY_THRESHOLD) {
+          queryResults.push({
+            fact: {
+              id: doc.id,
+              userId: data.userId,
+              text: data.text,
+              embedding,
+              createdAt: data.createdAt?.toDate() || new Date(),
+              updatedAt: data.updatedAt?.toDate() || new Date(),
+            },
+            similarity,
+          });
+        }
       }
 
-      // Calculate cosine similarity
-      const similarity = cosineSimilarity(queryEmbedding, embedding);
+      // Sort by similarity (highest first)
+      queryResults.sort((a, b) => b.similarity - a.similarity);
 
-      // Only include if above threshold
-      if (similarity >= MIN_SIMILARITY_THRESHOLD) {
-        resultsWithScores.push({
-          fact: {
-            id: doc.id,
-            userId: data.userId,
-            text: data.text,
-            embedding,
-            createdAt: data.createdAt?.toDate() || new Date(),
-            updatedAt: data.updatedAt?.toDate() || new Date(),
-          },
-          similarity,
-        });
+      allQueryResults.push({
+        query,
+        results: queryResults,
+      });
+
+      testLog(`  📊 Query ${allQueryResults.length}/${transformedQueries.length} results`, {
+        query: query.substring(0, 100),
+        resultsFound: queryResults.length,
+        topResults: queryResults.slice(0, 3).map(r => ({
+          text: r.fact.text.substring(0, 60),
+          similarity: r.similarity.toFixed(3),
+        })),
+      });
+    }
+
+    // Merge results using simple deduplication (keep highest similarity per fact)
+    const mergedResults = new Map<string, {fact: KnowledgeFact; similarity: number}>();
+
+    for (const queryResult of allQueryResults) {
+      for (const result of queryResult.results) {
+        const existing = mergedResults.get(result.fact.id);
+        if (!existing || result.similarity > existing.similarity) {
+          mergedResults.set(result.fact.id, result);
+        }
       }
     }
 
-    // Sort by similarity (highest first)
-    resultsWithScores.sort((a, b) => b.similarity - a.similarity);
+    // Convert to array and sort by similarity
+    const finalResults = Array.from(mergedResults.values())
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, topK);
 
-    // Take top K
-    const topResults = resultsWithScores.slice(0, topK);
-
-    logger.info("Knowledge search with scores complete", {
+    testLog("🔍 MULTI-QUERY SEARCH: Complete", {
       userId,
-      totalFacts: snapshot.size,
-      aboveThreshold: resultsWithScores.length,
-      returned: topResults.length,
+      originalQuery: queryText.substring(0, 100),
+      queriesProcessed: transformedQueries.length,
+      totalResultsBeforeMerge: allQueryResults.reduce((sum, qr) => sum + qr.results.length, 0),
+      uniqueResultsAfterMerge: mergedResults.size,
+      finalTopK: finalResults.length,
+      topResults: finalResults.slice(0, 5).map(r => ({
+        text: r.fact.text.substring(0, 60),
+        similarity: r.similarity.toFixed(3),
+      })),
     });
 
-    return topResults;
+    return finalResults;
 
   } catch (error) {
     logger.error("Knowledge search with scores failed", {

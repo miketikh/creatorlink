@@ -10,9 +10,9 @@
 
 import * as admin from "firebase-admin";
 import {FieldValue} from "firebase-admin/firestore";
-import * as logger from "firebase-functions/logger";
 import {KnowledgeFact} from "../types";
 import {generateEmbedding, cosineSimilarity} from "./embedding-generator";
+import {testLog} from "./test-logger";
 
 // Deduplication threshold - facts with similarity > 0.95 are considered duplicates
 const DEDUPLICATION_THRESHOLD = 0.95;
@@ -27,18 +27,16 @@ const DEDUPLICATION_THRESHOLD = 0.95;
 export async function storeKnowledgeFact(
   fact: Partial<KnowledgeFact>
 ): Promise<string | null> {
-  const startTime = Date.now();
-
   try {
     if (!fact.userId || !fact.text) {
       throw new Error("userId and text are required");
     }
 
-    logger.info("Storing knowledge fact", {
-      userId: fact.userId,
-      textLength: fact.text.length,
-      textPreview: fact.text.substring(0, 50),
-    });
+    // logger.info("Storing knowledge fact", {
+    //   userId: fact.userId,
+    //   textLength: fact.text.length,
+    //   textPreview: fact.text.substring(0, 50),
+    // });
 
     // Generate embedding for the fact
     const embedding = await generateEmbedding(fact.text);
@@ -51,10 +49,10 @@ export async function storeKnowledgeFact(
     );
 
     if (isDuplicate) {
-      logger.info("Fact is duplicate, skipping storage", {
-        userId: fact.userId,
-        textPreview: fact.text.substring(0, 50),
-      });
+      // logger.info("Fact is duplicate, skipping storage", {
+      //   userId: fact.userId,
+      //   textPreview: fact.text.substring(0, 50),
+      // });
       return null;
     }
 
@@ -72,22 +70,18 @@ export async function storeKnowledgeFact(
 
     await docRef.set(factData);
 
-    const duration = Date.now() - startTime;
-    logger.info("Knowledge fact stored successfully", {
-      factId: docRef.id,
-      userId: fact.userId,
-      durationMs: duration,
-    });
+    // logger.info("Knowledge fact stored successfully", {
+    //   factId: docRef.id,
+    //   userId: fact.userId,
+    // });
 
     return docRef.id;
 
   } catch (error) {
-    const duration = Date.now() - startTime;
-    logger.error("Failed to store knowledge fact", {
-      userId: fact.userId,
-      error: error instanceof Error ? error.message : String(error),
-      durationMs: duration,
-    });
+    // logger.error("Failed to store knowledge fact", {
+    //   userId: fact.userId,
+    //   error: error instanceof Error ? error.message : String(error),
+    // });
     throw error;
   }
 }
@@ -114,7 +108,7 @@ async function checkForDuplicate(
       .get();
 
     if (existingFacts.empty) {
-      logger.info("No existing facts for user, not a duplicate", {userId});
+      // logger.info("No existing facts for user, not a duplicate", {userId});
       return false;
     }
 
@@ -131,42 +125,44 @@ async function checkForDuplicate(
       } else if (Array.isArray(existingFact.embedding)) {
         existingEmbedding = existingFact.embedding;
       } else {
-        logger.warn("Invalid embedding format, skipping comparison", {
-          factId: doc.id,
-        });
+        // logger.warn("Invalid embedding format, skipping comparison", {
+        //   factId: doc.id,
+        // });
         continue;
       }
 
       const similarity = cosineSimilarity(newEmbedding, existingEmbedding);
 
-      logger.info("Comparing with existing fact", {
-        factId: doc.id,
-        similarity: similarity.toFixed(3),
-        existingText: existingFact.text?.substring(0, 50),
-        newText: newText.substring(0, 50),
-      });
+      // Only log high similarity scores (> 0.90) to reduce noise
+      if (similarity > 0.90) {
+        testLog("🔍 SIMILARITY CHECK", {
+          userId,
+          similarity: similarity.toFixed(3),
+          existingFact: existingFact.text,
+          newFact: newText,
+        });
+      }
 
       if (similarity > DEDUPLICATION_THRESHOLD) {
-        logger.info("Duplicate detected!", {
-          factId: doc.id,
+        testLog("🎯 DUPLICATE DETECTED (similarity > 0.95)", {
+          userId,
           similarity: similarity.toFixed(3),
-          threshold: DEDUPLICATION_THRESHOLD,
         });
         return true;
       }
     }
 
-    logger.info("No duplicates found, fact is unique", {
-      userId,
-      checkedCount: existingFacts.size,
-    });
+    // logger.info("No duplicates found, fact is unique", {
+    //   userId,
+    //   checkedCount: existingFacts.size,
+    // });
     return false;
 
   } catch (error) {
-    logger.error("Error checking for duplicates", {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    // logger.error("Error checking for duplicates", {
+    //   userId,
+    //   error: error instanceof Error ? error.message : String(error),
+    // });
     // On error, assume not duplicate (better to store than lose data)
     return false;
   }
@@ -183,10 +179,8 @@ export async function getKnowledgeByUserId(
   userId: string,
   limit: number = 100
 ): Promise<KnowledgeFact[]> {
-  const startTime = Date.now();
-
   try {
-    logger.info("Fetching knowledge facts", {userId, limit});
+    // logger.info("Fetching knowledge facts", {userId, limit});
 
     const db = admin.firestore();
     const snapshot = await db.collection("knowledge")
@@ -218,22 +212,18 @@ export async function getKnowledgeByUserId(
       };
     });
 
-    const duration = Date.now() - startTime;
-    logger.info("Knowledge facts fetched", {
-      userId,
-      count: facts.length,
-      durationMs: duration,
-    });
+    // logger.info("Knowledge facts fetched", {
+    //   userId,
+    //   count: facts.length,
+    // });
 
     return facts;
 
   } catch (error) {
-    const duration = Date.now() - startTime;
-    logger.error("Failed to fetch knowledge facts", {
-      userId,
-      error: error instanceof Error ? error.message : String(error),
-      durationMs: duration,
-    });
+    // logger.error("Failed to fetch knowledge facts", {
+    //   userId,
+    //   error: error instanceof Error ? error.message : String(error),
+    // });
     throw error;
   }
 }

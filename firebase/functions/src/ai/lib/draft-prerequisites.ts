@@ -3,11 +3,12 @@
  * Determines if sufficient data exists to generate a quality draft response.
  */
 
-import * as logger from "firebase-functions/logger";
 import {ConversationCategory} from "../types";
 import {loadVoiceProfile} from "./voice-profile-loader";
 import {detectIfQuestion} from "./question-detector";
 import {searchKnowledgeWithScores} from "./knowledge-retriever";
+import {testLog} from "./test-logger";
+import {ConversationMessage} from "./message-fetcher";
 
 /**
  * Check if prerequisites are met for draft generation.
@@ -20,97 +21,109 @@ import {searchKnowledgeWithScores} from "./knowledge-retriever";
  * @param userId - User ID to check prerequisites for
  * @param category - Conversation category
  * @param messageText - Message text to analyze
+ * @param conversationHistory - Recent conversation messages for context (default: empty)
  * @returns Promise<boolean> - true if all checks pass, false otherwise
  */
 export async function checkDraftPrerequisites(
   userId: string,
   category: ConversationCategory,
-  messageText: string
+  messageText: string,
+  conversationHistory: ConversationMessage[] = []
 ): Promise<boolean> {
-  const startTime = Date.now();
-
   try {
-    logger.info("Checking draft prerequisites", {
-      userId,
-      category,
-      messageLength: messageText.length,
-    });
+    // logger.info("Checking draft prerequisites", {
+    //   userId,
+    //   category,
+    //   messageLength: messageText.length,
+    // });
 
     // Check 1: Voice profile exists
     const voiceProfile = await loadVoiceProfile(userId, category);
     if (!voiceProfile) {
-      logger.info("Draft prerequisites NOT met: no voice profile", {
+      testLog("  ❌ NO VOICE PROFILE", {
         userId,
         category,
-        check: "voice_profile",
-        passed: false,
       });
       return false;
     }
-    logger.info("Voice profile check passed", {
+    testLog("  ✅ Voice profile found", {
       userId,
       category,
-      check: "voice_profile",
-      passed: true,
     });
 
     // Check 2: Message is a question or request
     const questionResult = await detectIfQuestion(messageText);
     if (!questionResult.isQuestion || questionResult.confidence < 0.6) {
-      logger.info("Draft prerequisites NOT met: not a question", {
+      testLog("  ❌ NOT A QUESTION", {
         userId,
-        category,
-        check: "is_question",
-        passed: false,
         isQuestion: questionResult.isQuestion,
         confidence: questionResult.confidence,
       });
       return false;
     }
-    logger.info("Question detection check passed", {
+    testLog("  ✅ Message is a question", {
       userId,
-      category,
-      check: "is_question",
-      passed: true,
       confidence: questionResult.confidence,
     });
 
     // Check 3: Relevant knowledge available (search with similarity threshold)
-    // Note: This is optional - some questions can be answered without specific knowledge
-    // We'll search but won't fail if no knowledge found, just log it
-    const knowledgeResults = await searchKnowledgeWithScores(messageText, userId, 5);
+    // IMPORTANT: We require relevant knowledge to generate a quality draft
+    // Note: Threshold 0.45 calibrated for text-embedding-3-small model
+    // Pass conversation history for context-aware query transformation (e.g., "u?" with context)
+    const knowledgeResults = await searchKnowledgeWithScores(messageText, userId, 5, conversationHistory);
     const hasRelevantKnowledge = knowledgeResults.length > 0 &&
-      knowledgeResults[0].similarity > 0.7;
+      knowledgeResults[0].similarity > 0.45;
 
-    logger.info("Knowledge availability check", {
+    testLog("  📚 Knowledge check", {
       userId,
-      category,
-      check: "knowledge_available",
       hasRelevantKnowledge,
       resultsCount: knowledgeResults.length,
-      topSimilarity: knowledgeResults.length > 0 ? knowledgeResults[0].similarity : 0,
+      topFacts: knowledgeResults.slice(0, 3).map(r => ({
+        text: r.fact.text,
+        similarity: r.similarity.toFixed(2)
+      }))
     });
 
+    // NEW: Require relevant knowledge to generate draft
+    if (!hasRelevantKnowledge) {
+      testLog("  ❌ INSUFFICIENT KNOWLEDGE", {
+        userId,
+        resultsCount: knowledgeResults.length,
+        topSimilarity: knowledgeResults.length > 0 ? knowledgeResults[0].similarity : 0,
+        threshold: 0.45,
+        reason: knowledgeResults.length === 0 ?
+          "No knowledge facts found for user" :
+          `Top similarity (${knowledgeResults[0].similarity.toFixed(3)}) below threshold (0.45)`,
+      });
+      return false;
+    }
+
     // All checks passed
-    const duration = Date.now() - startTime;
-    logger.info("Draft prerequisites check complete", {
+    // const duration = Date.now() - startTime;
+    // logger.info("Draft prerequisites check complete", {
+    //   userId,
+    //   category,
+    //   passed: true,
+    //   hasRelevantKnowledge,
+    //   durationMs: duration,
+    // });
+
+    testLog("  ✅ Prerequisites met - proceeding to generate draft", {
       userId,
       category,
-      passed: true,
-      hasRelevantKnowledge,
-      durationMs: duration,
+      hasRelevantKnowledge: true,
     });
 
     return true;
 
   } catch (error) {
-    const duration = Date.now() - startTime;
-    logger.error("Draft prerequisites check failed", {
-      userId,
-      category,
-      error: error instanceof Error ? error.message : String(error),
-      durationMs: duration,
-    });
+    // const duration = Date.now() - startTime;
+    // logger.error("Draft prerequisites check failed", {
+    //   userId,
+    //   category,
+    //   error: error instanceof Error ? error.message : String(error),
+    //   durationMs: duration,
+    // });
 
     // Return false on error (don't generate draft if checks fail)
     return false;

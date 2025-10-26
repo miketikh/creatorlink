@@ -15,6 +15,7 @@ export {extractKnowledge} from "./lib/knowledge-extractor";
 export {generateEmbedding, generateEmbeddingsBatch, cosineSimilarity} from "./lib/embedding-generator";
 export {storeKnowledgeFact, getKnowledgeByUserId} from "./lib/knowledge-store";
 export {searchKnowledge, searchKnowledgeWithScores} from "./lib/knowledge-retriever";
+export {transformQuery} from "./lib/query-transformer";
 export {loadVoiceProfile} from "./lib/voice-profile-loader";
 export {checkDraftPrerequisites} from "./lib/draft-prerequisites";
 export {generateDraft} from "./lib/draft-generator";
