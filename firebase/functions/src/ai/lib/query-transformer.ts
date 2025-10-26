@@ -154,13 +154,12 @@ ${queryText}
 Transform the latest message into queries to search the recipient's knowledge base. Extract ALL distinct topics (max 3). Use the conversation context if the message is ambiguous.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: "gpt-4.1-mini",
       messages: [
         {role: "system", content: systemPrompt},
         {role: "user", content: userPrompt},
       ],
       response_format: {type: "json_object"},
-      reasoning_effort: "minimal",
       // max_completion_tokens: 150, // Increased for multiple queries
     });
 

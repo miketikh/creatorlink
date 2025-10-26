@@ -5,7 +5,7 @@
 
 import {ConversationCategory} from "../types";
 import {loadVoiceProfile} from "./voice-profile-loader";
-import {detectIfQuestion} from "./question-detector";
+// import {detectIfQuestion} from "./question-detector";
 import {searchKnowledgeWithScores} from "./knowledge-retriever";
 import {testLog} from "./test-logger";
 import {ConversationMessage} from "./message-fetcher";
@@ -52,19 +52,20 @@ export async function checkDraftPrerequisites(
     });
 
     // Check 2: Message is a question or request
-    const questionResult = await detectIfQuestion(messageText);
-    if (!questionResult.isQuestion || questionResult.confidence < 0.6) {
-      testLog("  ❌ NOT A QUESTION", {
-        userId,
-        isQuestion: questionResult.isQuestion,
-        confidence: questionResult.confidence,
-      });
-      return false;
-    }
-    testLog("  ✅ Message is a question", {
-      userId,
-      confidence: questionResult.confidence,
-    });
+    // Orchestrator handles decision - if we're here, orchestrator already determined this needs a draft response
+    // const questionResult = await detectIfQuestion(messageText);
+    // if (!questionResult.isQuestion || questionResult.confidence < 0.6) {
+    //   testLog("  ❌ NOT A QUESTION", {
+    //     userId,
+    //     isQuestion: questionResult.isQuestion,
+    //     confidence: questionResult.confidence,
+    //   });
+    //   return false;
+    // }
+    // testLog("  ✅ Message is a question", {
+    //   userId,
+    //   confidence: questionResult.confidence,
+    // });
 
     // Check 3: Relevant knowledge available (search with similarity threshold)
     // IMPORTANT: We require relevant knowledge to generate a quality draft

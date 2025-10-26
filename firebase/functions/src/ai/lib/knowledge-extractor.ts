@@ -99,7 +99,8 @@ IGNORE:
 KEY PRINCIPLE:
 Use the previous messages for context, but do not extract facts from previous messages. You are only extracting facts from the current message.
 
-Respond with JSON only: {"facts": [{"text": "normalized fact text"}]}
+Respond with JSON only: {"facts": ["fact text 1", "fact text 2", ...]}
+Return facts as an array of strings.
 If no facts found, return: {"facts": []}`;
 
     const userPrompt = `CONVERSATION CONTEXT (last 5 messages):
@@ -111,34 +112,64 @@ USER: ${messageText}
 Extract all factual information ABOUT the user from the current message, using the conversation context to normalize incomplete answers.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: "gpt-4.1-mini",
       messages: [
         {role: "system", content: systemPrompt},
         {role: "user", content: userPrompt},
       ],
       response_format: {type: "json_object"},
-      reasoning_effort: "minimal",
       // max_completion_tokens: 500,
     });
 
     const responseContent = completion.choices[0]?.message?.content;
 
+    testLog("🤖 KNOWLEDGE EXTRACTION: AI Raw Response", {
+      userId: senderId,
+      messageText,
+      rawResponse: responseContent,
+      responseLength: responseContent?.length || 0,
+    });
+
     if (!responseContent) {
       logger.warn("Empty response from OpenAI during knowledge extraction");
+      testLog("⚠️ KNOWLEDGE EXTRACTION: Empty AI response", {userId: senderId});
       return {success: true, facts: []};
     }
 
-    const parsed = JSON.parse(responseContent) as {facts: Array<{text: string}>};
+    const parsed = JSON.parse(responseContent) as {facts: Array<string>};
+
+    testLog("📊 KNOWLEDGE EXTRACTION: Parsed JSON", {
+      userId: senderId,
+      parsedStructure: parsed,
+      factsArray: parsed.facts,
+      factsCount: parsed.facts?.length || 0,
+    });
 
     // Convert to KnowledgeFact format (without id/embedding yet - those are added during storage)
-    const facts = parsed.facts.map(f => ({
-      id: "", // Will be set by Firestore
+    const facts = parsed.facts.map((factText, index) => {
+      testLog(`🔍 KNOWLEDGE EXTRACTION: Processing fact ${index + 1}/${parsed.facts.length}`, {
+        userId: senderId,
+        factText,
+        hasText: !!factText,
+      });
+
+      return {
+        id: "", // Will be set by Firestore
+        userId: senderId,
+        text: factText,
+        embedding: [], // Will be generated during storage
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+    });
+
+    testLog("✅ KNOWLEDGE EXTRACTION: Facts mapped to KnowledgeFact format", {
       userId: senderId,
-      text: f.text,
-      embedding: [], // Will be generated during storage
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
+      totalFacts: facts.length,
+      factsWithText: facts.filter(f => f.text).length,
+      factsWithoutText: facts.filter(f => !f.text).length,
+      sampleFacts: facts.slice(0, 3).map(f => ({text: f.text, hasText: !!f.text})),
+    });
 
     // logger.info("Knowledge extraction complete", {
     //   factsExtracted: facts.length,
@@ -159,16 +190,26 @@ Extract all factual information ABOUT the user from the current message, using t
     };
 
   } catch (error) {
-    // logger.error("Knowledge extraction failed", {
-    //   error: error instanceof Error ? error.message : String(error),
-    //   durationMs: Date.now() - startTime,
-    //   senderId,
-    // });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+
+    logger.error("Knowledge extraction failed", {
+      error: errorMessage,
+      senderId,
+    });
+
+    testLog("❌ KNOWLEDGE EXTRACTION: ERROR", {
+      userId: senderId,
+      messageText,
+      error: errorMessage,
+      errorStack,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
 
     return {
       success: false,
       facts: [],
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage,
     };
   }
 }

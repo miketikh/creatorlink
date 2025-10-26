@@ -16,7 +16,7 @@
 import * as logger from "firebase-functions/logger";
 import {testLog} from "../ai/lib/test-logger";
 import {
-  detectIfQuestion,
+  // detectIfQuestion,
   fetchConversationMessages,
   extractKnowledge,
   storeKnowledgeFact,
@@ -67,14 +67,15 @@ export async function runKnowledgeExtractionPipeline(context: MessageContext): P
       return;
     }
 
-    const questionResult = await detectIfQuestion(context.messageText);
-    if (questionResult.isQuestion) {
-      logger.info("Knowledge Extraction Pipeline: Skipping (question)", {
-        messageId: context.messageId,
-        confidence: questionResult.confidence,
-      });
-      return;
-    }
+    // Orchestrator handles decision - if we're here, orchestrator already determined this has information
+    // const questionResult = await detectIfQuestion(context.messageText);
+    // if (questionResult.isQuestion) {
+    //   logger.info("Knowledge Extraction Pipeline: Skipping (question)", {
+    //     messageId: context.messageId,
+    //     confidence: questionResult.confidence,
+    //   });
+    //   return;
+    // }
 
     // Fetch recent messages for context
     const recentMessages = await fetchConversationMessages(context.conversationId, 5);

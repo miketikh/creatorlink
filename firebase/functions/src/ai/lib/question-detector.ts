@@ -45,13 +45,12 @@ Respond with JSON only: {"isQuestion": boolean, "confidence": number between 0 a
     const userPrompt = `Analyze this message: "${messageText}"`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: "gpt-4.1-mini",
       messages: [
         {role: "system", content: systemPrompt},
         {role: "user", content: userPrompt},
       ],
       response_format: {type: "json_object"},
-      reasoning_effort: "minimal",
       // max_completion_tokens: 100,
     });
 

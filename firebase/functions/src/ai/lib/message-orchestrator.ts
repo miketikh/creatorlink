@@ -81,7 +81,7 @@ You must decide three things:
 
 1. **needsGroupAnswer**: Should the Group FAQ Pipeline run?
    - ONLY true if ALL conditions met:
-     * Participant count > 2, not counting the AI assistant (is a group chat)
+     * Participant count > 2
      * AI assistant is enabled
      * The message is a genuine question that needs answering
    - Questions like "how are you?", "what's up?", "how's everyone?" should be FALSE
@@ -96,6 +96,7 @@ You must decide three things:
    Example: "Hey, what're you doing later? I'm going to a show in the evening." - True. It is a question, AND contains new information about the sender's plans.
 
 3. **needsDraftResponse**: Should the Draft Generation Pipeline run?
+   - ONLY activated in 1:1 conversations, skip for any where participant count > 2
    - True if this is a question or message that other participants might want to respond to
    - Consider if recipients would benefit from a suggested response draft
    - False for greetings, rhetorical questions, or statements that don't need responses

@@ -84,13 +84,12 @@ ${followingContext}
 Only return hasMatch: true if similar question was asked and answered in PREVIOUS messages AND no FOLLOWING messages.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: "gpt-4.1-mini",
       messages: [
         {role: "system", content: systemPrompt},
         {role: "user", content: userPrompt},
       ],
       response_format: {type: "json_object"},
-      reasoning_effort: "minimal",
       // max_completion_tokens: 500,
     });
 

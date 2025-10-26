@@ -13,7 +13,7 @@
  */
 
 import * as logger from "firebase-functions/logger";
-import {detectIfQuestion, fetchConversationMessages, findFAQMatch, writeAIResponse} from "../ai";
+import {/* detectIfQuestion, */ fetchConversationMessages, findFAQMatch, writeAIResponse} from "../ai";
 
 const AI_USER_ID = "ai-assistant";
 
@@ -58,26 +58,26 @@ export async function runGroupFAQPipeline(context: MessageContext): Promise<void
     }
 
     // Filter 4: Detect if message is a question
-    const questionResult = await detectIfQuestion(context.messageText);
+    // Orchestrator handles decision - if we're here, orchestrator already determined this is a question
+    // const questionResult = await detectIfQuestion(context.messageText);
 
-    logger.info("Group FAQ Pipeline: Question detection result", {
-      messageId: context.messageId,
-      isQuestion: questionResult.isQuestion,
-      confidence: questionResult.confidence,
-    });
+    // logger.info("Group FAQ Pipeline: Question detection result", {
+    //   messageId: context.messageId,
+    //   isQuestion: questionResult.isQuestion,
+    //   confidence: questionResult.confidence,
+    // });
 
-    if (!questionResult.isQuestion) {
-      logger.info("Group FAQ Pipeline: Skipping (not a question)", {
-        messageId: context.messageId,
-        confidence: questionResult.confidence,
-      });
-      return;
-    }
+    // if (!questionResult.isQuestion) {
+    //   logger.info("Group FAQ Pipeline: Skipping (not a question)", {
+    //     messageId: context.messageId,
+    //     confidence: questionResult.confidence,
+    //   });
+    //   return;
+    // }
 
     logger.info("Group FAQ Pipeline: Processing question for FAQ detection", {
       messageId: context.messageId,
       conversationId: context.conversationId,
-      confidence: questionResult.confidence,
     });
 
     // Fetch conversation messages for context
