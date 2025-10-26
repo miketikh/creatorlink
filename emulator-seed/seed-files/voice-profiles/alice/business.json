@@ -9,26 +9,26 @@
   },
   "vocabulary": {
     "greetings": {
-      "standard": ["Hello", "Hi"],
-      "alternatives": ["Good morning", "Good afternoon", "Hi there"]
+      "standard": ["Hi", "Hello"],
+      "alternatives": ["Hi there", "Good morning", "Hope you're doing well"]
     },
     "closings": {
-      "standard": ["Best regards", "Thanks"],
-      "alternatives": ["Thank you", "Best", "Regards"]
+      "standard": ["Best", "Thanks"],
+      "alternatives": ["Thank you", "Looking forward to connecting", "Appreciate your time", "Warm regards"]
     },
     "commonWords": {
       "what's up": ["what's up"],
       "you": ["you"],
       "are": ["are"],
       "probably": ["probably"],
-      "okay": ["okay", "ok"]
+      "okay": ["sounds good", "that works", "perfect"]
     },
-    "fillerWords": ["certainly", "absolutely", "indeed"],
-    "signaturePhrases": ["I appreciate your time", "Let me know if you have questions", "Happy to discuss further", "Looking forward to hearing from you"]
+    "fillerWords": ["definitely", "absolutely", "really"],
+    "signaturePhrases": ["I'd love to learn more", "This sounds like a great fit", "Happy to discuss further", "Let me know the next steps", "Excited about this opportunity"]
   },
   "expressiveness": {
     "emojis": "rarely",
-    "commonEmojis": ["👍", "📧", "✓"],
+    "commonEmojis": ["😊", "👍"],
     "exclamations": "rarely",
     "multiPunctuation": false,
     "ellipsis": false

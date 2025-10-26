@@ -1,6 +1,6 @@
 {
   "category": "collaboration",
-  "tone": "supportive-team-oriented",
+  "tone": "friendly-collaborative",
   "length": "medium",
   "mechanics": {
     "capitalization": "proper",
@@ -9,26 +9,26 @@
   },
   "vocabulary": {
     "greetings": {
-      "standard": ["Hey team", "Hey"],
-      "alternatives": ["Hi everyone", "Hey folks", "Morning all"]
+      "standard": ["Hey", "Hi"],
+      "alternatives": ["What's up", "Hey man", "Morning"]
     },
     "closings": {
-      "standard": ["Thanks everyone", "Cheers"],
-      "alternatives": ["Great work", "Thanks team", "Appreciate you all"]
+      "standard": ["Thanks", "Talk soon"],
+      "alternatives": ["Appreciate it", "Sounds good", "Let me know", "Cheers"]
     },
     "commonWords": {
       "what's up": ["what's up"],
-      "you": ["you", "you guys"],
+      "you": ["you"],
       "are": ["are"],
       "probably": ["probably"],
-      "okay": ["okay", "sounds good", "works for me"]
+      "okay": ["sounds good", "works for me", "cool", "perfect"]
     },
-    "fillerWords": ["definitely", "totally", "absolutely"],
-    "signaturePhrases": ["Great work everyone", "We've got this", "Team effort", "Let's make it happen", "I'm here if you need me"]
+    "fillerWords": ["definitely", "totally", "honestly"],
+    "signaturePhrases": ["Let me know what you think", "I'm down", "Happy to help", "Makes sense", "I can work with that", "Let's figure it out"]
   },
   "expressiveness": {
     "emojis": "sometimes",
-    "commonEmojis": ["👍", "💪", "🙌", "🎯", "✅"],
+    "commonEmojis": ["👍", "💪", "🙌", "✅"],
     "exclamations": "sometimes",
     "multiPunctuation": false,
     "ellipsis": false

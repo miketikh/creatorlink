@@ -1,6 +1,6 @@
 {
   "category": "collaboration",
-  "tone": "technical-friendly",
+  "tone": "creative-professional",
   "length": "medium",
   "mechanics": {
     "capitalization": "proper",
@@ -9,33 +9,33 @@
   },
   "vocabulary": {
     "greetings": {
-      "standard": ["Hi", "Hey"],
-      "alternatives": ["Hello everyone", "Hi team"]
+      "standard": ["Hey", "Hi"],
+      "alternatives": ["Hope you're doing well", "Good to connect", "Been following your work"]
     },
     "closings": {
-      "standard": ["Thanks", "Best"],
-      "alternatives": ["Thank you", "Appreciate it", "Cheers"]
+      "standard": ["Thanks", "Cheers"],
+      "alternatives": ["Looking forward to it", "Let me know", "Talk soon", "Appreciate it"]
     },
     "commonWords": {
-      "what's up": ["what's up"],
+      "what's up": ["how's it going"],
       "you": ["you"],
       "are": ["are"],
       "probably": ["probably", "likely"],
-      "okay": ["okay", "works", "that should work"]
+      "okay": ["sounds good", "works for me", "that could work", "I'm down"]
     },
-    "fillerWords": ["basically", "essentially", "specifically"],
-    "signaturePhrases": ["Let me know if that makes sense", "I can clarify if needed", "Does that work for everyone?", "I'll circle back on this", "Happy to walk through it"]
+    "fillerWords": ["definitely", "honestly", "actually"],
+    "signaturePhrases": ["I think this could be really cool", "I'm envisioning", "What do you think?", "I'd love to collaborate on this", "Happy to chat more about it", "Let me know if you're interested"]
   },
   "expressiveness": {
-    "emojis": "rarely",
-    "commonEmojis": ["👍", "✅", "💡"],
-    "exclamations": "rarely",
+    "emojis": "sometimes",
+    "commonEmojis": ["👍", "📸", "🔥", "✨"],
+    "exclamations": "sometimes",
     "multiPunctuation": false,
     "ellipsis": false
   },
   "structure": {
-    "avgLength": "3-4 sentences",
+    "avgLength": "2-3 sentences",
     "breakIntoMultiple": false,
-    "useLineBreaks": true
+    "useLineBreaks": false
   }
 }

@@ -34,6 +34,7 @@ const seedAIGroupTest = require('./seed-files/ai-group-test');
 const seedAICategorization = require('./seed-files/ai-categorization');
 const seedTestDraft = require('./seed-files/test-draft');
 const addVoiceProfiles = require('./seed-files/add-voice-profiles');
+const seedCompleteSeed = require('./seed-files/complete-seed');
 
 // Map of seed types to seed functions
 const SEED_TYPES = {
@@ -42,7 +43,8 @@ const SEED_TYPES = {
   'ai-group-test': seedAIGroupTest,
   'ai-categorization': seedAICategorization,
   'test-draft': seedTestDraft,
-  'add-voice-profiles': addVoiceProfiles
+  'add-voice-profiles': addVoiceProfiles,
+  'complete-seed': seedCompleteSeed
 };
 
 // Parse command line arguments

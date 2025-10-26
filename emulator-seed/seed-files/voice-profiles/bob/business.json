@@ -1,7 +1,7 @@
 {
   "category": "business",
   "tone": "direct-professional",
-  "length": "short",
+  "length": "medium",
   "mechanics": {
     "capitalization": "proper",
     "punctuation": "standard",
@@ -10,31 +10,31 @@
   "vocabulary": {
     "greetings": {
       "standard": ["Hi", "Hello"],
-      "alternatives": ["Hey", "Morning"]
+      "alternatives": ["Hope you're doing well", "Good to hear from you", "Thanks for reaching out"]
     },
     "closings": {
       "standard": ["Thanks", "Best"],
-      "alternatives": ["Thank you", "-Bob"]
+      "alternatives": ["Appreciate it", "Looking forward to it", "Talk soon", "Thank you"]
     },
     "commonWords": {
-      "what's up": ["what's up"],
+      "what's up": ["how are things"],
       "you": ["you"],
       "are": ["are"],
-      "probably": ["probably"],
-      "okay": ["okay", "ok"]
+      "probably": ["probably", "likely"],
+      "okay": ["sounds good", "works for me", "that works", "perfect"]
     },
-    "fillerWords": ["just", "quick"],
-    "signaturePhrases": ["Let me know", "Sounds good", "Got it", "Will do"]
+    "fillerWords": ["definitely", "honestly"],
+    "signaturePhrases": ["Let me know", "Happy to discuss", "Sounds good", "I'm interested", "Let's talk more", "Makes sense to me"]
   },
   "expressiveness": {
     "emojis": "rarely",
-    "commonEmojis": ["👍"],
+    "commonEmojis": ["👍", "✅"],
     "exclamations": "rarely",
     "multiPunctuation": false,
     "ellipsis": false
   },
   "structure": {
-    "avgLength": "1-2 sentences",
+    "avgLength": "2-3 sentences",
     "breakIntoMultiple": false,
     "useLineBreaks": false
   }

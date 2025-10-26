@@ -10,25 +10,25 @@
   "vocabulary": {
     "greetings": {
       "standard": ["Hey", "Hi"],
-      "alternatives": ["Hey there", "Hi everyone", "Morning"]
+      "alternatives": ["Hey there", "Hi everyone", "Hope you're doing well"]
     },
     "closings": {
-      "standard": ["Thanks", "Cheers"],
-      "alternatives": ["Thanks so much", "Appreciate it", "Talk soon"]
+      "standard": ["Thanks", "Best"],
+      "alternatives": ["Thanks so much", "Appreciate it", "Talk soon", "Looking forward to it"]
     },
     "commonWords": {
       "what's up": ["what's up"],
       "you": ["you"],
       "are": ["are"],
       "probably": ["probably"],
-      "okay": ["okay", "ok", "sounds good"]
+      "okay": ["okay", "sounds good", "perfect"]
     },
     "fillerWords": ["totally", "definitely", "honestly"],
-    "signaturePhrases": ["Let me know what you think", "Happy to help", "Sounds great", "I'm on it"]
+    "signaturePhrases": ["Let me know what you think", "Happy to help", "Sounds great", "I'm on it", "Love this idea", "Let's make it happen"]
   },
   "expressiveness": {
     "emojis": "sometimes",
-    "commonEmojis": ["👍", "😊", "🎉", "✨", "💪"],
+    "commonEmojis": ["👍", "😊", "🎉", "✨", "🙌"],
     "exclamations": "sometimes",
     "multiPunctuation": false,
     "ellipsis": false

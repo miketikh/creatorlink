@@ -9,32 +9,32 @@
   },
   "vocabulary": {
     "greetings": {
-      "standard": ["yo", "hey", "sup"],
-      "alternatives": ["what's good", "ayy", "yooo"]
+      "standard": ["hey", "yo", "sup"],
+      "alternatives": ["hey man", "what's up", "yoo"]
     },
     "closings": {
-      "standard": ["later", "peace"],
-      "alternatives": ["ttyl", "catch ya later", "see ya"]
+      "standard": ["later", "talk soon"],
+      "alternatives": ["catch ya later", "see ya", "peace"]
     },
     "commonWords": {
-      "what's up": ["sup", "wassup", "what's good"],
+      "what's up": ["sup", "what's up", "how's it going"],
       "you": ["u", "ya"],
       "are": ["r"],
-      "probably": ["prolly", "prob"],
-      "okay": ["k", "cool", "bet"]
+      "probably": ["prob", "prolly"],
+      "okay": ["cool", "sounds good", "bet"]
     },
-    "fillerWords": ["bro", "dude", "lol", "haha", "ngl"],
-    "signaturePhrases": ["that's wild", "no cap", "for real", "facts", "bet", "lowkey", "highkey"]
+    "fillerWords": ["dude", "man", "lol", "haha", "honestly"],
+    "signaturePhrases": ["that's crazy", "for real", "makes sense", "fair enough", "nice", "solid", "same"]
   },
   "expressiveness": {
-    "emojis": "often",
-    "commonEmojis": ["😂", "🔥", "💯", "👊", "🤙", "😎", "💀", "⚡"],
-    "exclamations": "often",
+    "emojis": "occasionally",
+    "commonEmojis": ["😂", "👍", "🔥", "😎", "💪", "🤙"],
+    "exclamations": "sometimes",
     "multiPunctuation": true,
     "ellipsis": false
   },
   "structure": {
-    "avgLength": "1 sentence",
+    "avgLength": "1-2 sentences",
     "breakIntoMultiple": true,
     "useLineBreaks": false
   }

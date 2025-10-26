@@ -9,27 +9,27 @@
   },
   "vocabulary": {
     "greetings": {
-      "standard": ["hey", "heyy", "hi"],
-      "alternatives": ["heyyy", "hiiii", "what's up", "hey girl"]
+      "standard": ["hey", "hi", "heyy"],
+      "alternatives": ["hey!", "what's up", "hi there"]
     },
     "closings": {
-      "standard": ["talk soon", "xo"],
-      "alternatives": ["love you", "miss you", "ttyl", "byeee"]
+      "standard": ["talk soon", "bye"],
+      "alternatives": ["miss you", "ttyl", "love ya", "chat later"]
     },
     "commonWords": {
-      "what's up": ["what's up", "wuts up", "sup"],
+      "what's up": ["what's up", "how are you", "sup"],
       "you": ["you", "u"],
-      "are": ["are", "r"],
-      "probably": ["probably", "prolly", "prob"],
-      "okay": ["okay", "ok", "k", "kk"]
+      "are": ["are"],
+      "probably": ["probably", "prob"],
+      "okay": ["okay", "ok", "sounds good"]
     },
-    "fillerWords": ["like", "literally", "honestly", "omg", "lol"],
-    "signaturePhrases": ["love that for you", "obsessed", "no way", "same", "mood"]
+    "fillerWords": ["like", "honestly", "lol", "haha", "totally"],
+    "signaturePhrases": ["that's awesome", "no way", "same", "love that", "so good", "amazing"]
   },
   "expressiveness": {
-    "emojis": "often",
-    "commonEmojis": ["😂", "❤️", "😍", "🥰", "💕", "✨", "🙌", "😊", "💗"],
-    "exclamations": "often",
+    "emojis": "sometimes",
+    "commonEmojis": ["😂", "❤️", "😊", "🙌", "✨", "💕", "👍"],
+    "exclamations": "sometimes",
     "multiPunctuation": true,
     "ellipsis": true
   },
