@@ -36,6 +36,7 @@ struct ChatDetailView: View {
     @State private var showFAQError = false
     @State private var isLoadingFAQReference = false
     @State private var showTagEditor = false
+    @State private var textSelection: TextSelection?
     @FocusState private var isInputFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -539,7 +540,7 @@ struct ChatDetailView: View {
             Divider()
 
             HStack(spacing: 12) {
-                TextField("Message...", text: $messageText, axis: .vertical)
+                TextField("Message...", text: $messageText, selection: $textSelection, axis: .vertical)
                     .textFieldStyle(.plain)
                     .padding(8)
                     .background(viewModel.currentDraft != nil ? Color.indigo.opacity(0.05) : Color(.systemGray6))
@@ -663,20 +664,17 @@ struct ChatDetailView: View {
 
     @MainActor
     private func useDraft(draft: MessageDraft) async {
-        // Store the draft text before dismissing
-        let draftText = draft.text
+        // Set the text first
+        messageText = draft.text
 
-        // Dismiss the draft banner FIRST
+        // Position cursor at the beginning
+        textSelection = TextSelection(insertionPoint: messageText.startIndex)
+
+        // Dismiss the draft banner (this makes it disappear)
         await viewModel.dismissDraft()
 
-        // Focus the empty field first (cursor will be at position 0)
+        // Focus the input field
         isInputFocused = true
-
-        // Small delay to ensure focus is set before text is added
-        try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
-
-        // THEN set the text (cursor stays at beginning)
-        messageText = draftText
     }
 
     private func dismissDraft() async {

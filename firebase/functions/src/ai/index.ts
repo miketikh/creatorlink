@@ -20,6 +20,7 @@ export {loadVoiceProfile} from "./lib/voice-profile-loader";
 export {checkDraftPrerequisites} from "./lib/draft-prerequisites";
 export {generateDraft} from "./lib/draft-generator";
 export {saveDraft, getDraft, deleteDraft, shouldUpdateDraft, markDraftTouched} from "./lib/draft-manager";
+export {orchestrateMessage} from "./lib/message-orchestrator";
 export {
   getCachedResult,
   setCachedResult,
@@ -44,6 +45,7 @@ export type {
   VoiceProfile,
   MessageDraft,
   DraftGenerationResult,
+  OrchestrationDecision,
 } from "./types";
 export type {ConversationMessage} from "./lib/message-fetcher";
 export type {FAQMatch} from "./lib/faq-matcher";

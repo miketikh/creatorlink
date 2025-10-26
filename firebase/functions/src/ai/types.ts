@@ -157,6 +157,16 @@ export interface DraftGenerationResult {
   error?: string;
 }
 
+/**
+ * Orchestration decision for pipeline routing.
+ * Determines which pipelines should run for a given message.
+ */
+export interface OrchestrationDecision {
+  needsGroupAnswer: boolean;    // Should Group FAQ Pipeline run?
+  hasNewInformation: boolean;   // Should Knowledge Extraction Pipeline run?
+  needsDraftResponse: boolean;  // Should Draft Generation Pipeline run?
+}
+
 // Add more types here as we expand AI functionality
 // Example future types:
 // - ContextDetectionResult

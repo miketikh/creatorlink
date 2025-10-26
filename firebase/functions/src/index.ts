@@ -2,12 +2,13 @@
  * CreatorLink AI Messaging Service - Cloud Functions
  *
  * This function triggers when new messages are created in Firestore.
- * Routes messages to three independent pipelines:
+ * Uses an AI orchestrator to intelligently route messages to applicable pipelines:
  * 1. Group FAQ Pipeline - Detects questions in group chats and posts AI responses
  * 2. Knowledge Extraction Pipeline - Extracts and stores facts from messages
  * 3. Draft Generation Pipeline - Generates personalized response drafts
  *
- * Each pipeline runs independently and will not block others.
+ * The orchestrator makes a single AI call to decide which pipelines should run,
+ * replacing the previous approach of running all pipelines unconditionally.
  */
 
 import {onDocumentCreated} from "firebase-functions/v2/firestore";
@@ -18,6 +19,8 @@ import {
   fetchConversationContext,
   shouldAnalyzeMessage,
   updateConversationTags,
+  fetchConversationMessages,
+  orchestrateMessage,
 } from "./ai";
 import {runGroupFAQPipeline} from "./pipelines/group-faq-pipeline";
 import {runKnowledgeExtractionPipeline} from "./pipelines/knowledge-extraction-pipeline";
@@ -71,24 +74,100 @@ export const onMessageCreated = onDocumentCreated(
       senderId: messageData.senderId || "",
     };
 
-    // Route to all applicable pipelines (run independently)
-    // Using Promise.allSettled to ensure one pipeline failure doesn't affect others
-    const results = await Promise.allSettled([
-      runGroupFAQPipeline(messageContext),
-      runKnowledgeExtractionPipeline(messageContext),
-      runDraftGenerationPipeline(messageContext),
-    ]);
+    // Use orchestrator to intelligently route messages to applicable pipelines
+    try {
+      // Fetch conversation context for orchestrator (5-10 messages)
+      const conversationContext = await fetchConversationMessages(messageContext.conversationId, 5);
 
-    // Log any pipeline failures (for monitoring)
-    results.forEach((result, index) => {
-      const pipelineNames = ["Group FAQ", "Knowledge Extraction", "Draft Generation"];
-      if (result.status === "rejected") {
-        logger.error(`${pipelineNames[index]} Pipeline failed`, {
+      // Get conversation metadata
+      const participantCount = messageContext.participantIds.length;
+      const isAIEnabled = messageContext.participantIds.includes(AI_USER_ID);
+
+      // Call orchestrator to make decisions
+      const decision = await orchestrateMessage(
+        messageContext.messageText,
+        conversationContext,
+        participantCount,
+        isAIEnabled
+      );
+
+      logger.info("Orchestrator decisions", {
+        messageId,
+        conversationId: messageContext.conversationId,
+        needsGroupAnswer: decision.needsGroupAnswer,
+        hasNewInformation: decision.hasNewInformation,
+        needsDraftResponse: decision.needsDraftResponse,
+      });
+
+      // Build conditional pipeline array based on orchestrator decisions
+      const pipelinesToRun: Promise<void>[] = [];
+      const pipelineNames: string[] = [];
+
+      if (decision.needsGroupAnswer) {
+        pipelinesToRun.push(runGroupFAQPipeline(messageContext));
+        pipelineNames.push("Group FAQ");
+      }
+
+      if (decision.hasNewInformation) {
+        pipelinesToRun.push(runKnowledgeExtractionPipeline(messageContext));
+        pipelineNames.push("Knowledge Extraction");
+      }
+
+      if (decision.needsDraftResponse) {
+        pipelinesToRun.push(runDraftGenerationPipeline(messageContext));
+        pipelineNames.push("Draft Generation");
+      }
+
+      // Execute selected pipelines
+      if (pipelinesToRun.length > 0) {
+        logger.info("Running pipelines", {
           messageId,
-          error: result.reason,
+          pipelines: pipelineNames,
+        });
+
+        const results = await Promise.allSettled(pipelinesToRun);
+
+        // Log any pipeline failures (for monitoring)
+        results.forEach((result, index) => {
+          if (result.status === "rejected") {
+            logger.error(`${pipelineNames[index]} Pipeline failed`, {
+              messageId,
+              error: result.reason,
+            });
+          }
+        });
+      } else {
+        logger.info("No pipelines selected by orchestrator", {
+          messageId,
+          conversationId: messageContext.conversationId,
         });
       }
-    });
+
+    } catch (error) {
+      // Fallback: If orchestrator fails, run all pipelines as before
+      logger.error("Orchestrator failed, running all pipelines as fallback", {
+        messageId,
+        conversationId: messageContext.conversationId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      const results = await Promise.allSettled([
+        runGroupFAQPipeline(messageContext),
+        runKnowledgeExtractionPipeline(messageContext),
+        runDraftGenerationPipeline(messageContext),
+      ]);
+
+      // Log any pipeline failures (for monitoring)
+      results.forEach((result, index) => {
+        const pipelineNames = ["Group FAQ", "Knowledge Extraction", "Draft Generation"];
+        if (result.status === "rejected") {
+          logger.error(`${pipelineNames[index]} Pipeline failed`, {
+            messageId,
+            error: result.reason,
+          });
+        }
+      });
+    }
 
     // LEGACY FEATURE: AI Auto-Tagging (categorization)
     // This runs independently and is kept separate as it's an older feature

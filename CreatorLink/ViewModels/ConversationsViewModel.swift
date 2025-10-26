@@ -31,6 +31,7 @@ class ConversationsViewModel {
     private let taggingService = TaggingService.shared
     private let draftService = DraftService.shared
     private var conversationsListener: ListenerRegistration?
+    private var draftListeners: [String: ListenerRegistration] = [:]  // conversationId → listener
     var currentUserId: String?
 
     // MARK: - Computed Properties
@@ -131,6 +132,9 @@ class ConversationsViewModel {
 
             // Load drafts for all conversations
             await loadDrafts(userId: userId)
+
+            // Set up real-time listeners for drafts
+            setupDraftListeners(userId: userId)
         } catch {
             errorMessage = error.localizedDescription
             isLoading = false
@@ -248,6 +252,12 @@ class ConversationsViewModel {
                 }
 
                 self.conversations = conversations
+
+                // Reload drafts when conversations change
+                Task {
+                    await self.loadDrafts(userId: userId)
+                    self.setupDraftListeners(userId: userId)
+                }
             }
         }
     }
@@ -255,6 +265,10 @@ class ConversationsViewModel {
     func cleanup() {
         conversationsListener?.remove()
         conversationsListener = nil
+
+        // Clean up draft listeners
+        draftListeners.values.forEach { $0.remove() }
+        draftListeners.removeAll()
     }
 
     // MARK: - Filter Management
@@ -479,9 +493,39 @@ class ConversationsViewModel {
             // Collect results
             for await (conversationId, draft) in group {
                 if let draft = draft {
-                    draftsCache[conversationId] = draft
+                    await MainActor.run {
+                        draftsCache[conversationId] = draft
+                    }
                 }
             }
+        }
+    }
+
+    /// Sets up real-time listeners for drafts
+    private func setupDraftListeners(userId: String) {
+        // Clean up existing listeners first
+        draftListeners.values.forEach { $0.remove() }
+        draftListeners.removeAll()
+
+        // Set up a listener for each conversation
+        for conversation in conversations {
+            guard let conversationId = conversation.id else { continue }
+
+            let listener = draftService.listenToDraft(
+                conversationId: conversationId,
+                userId: userId
+            ) { [weak self] draft in
+                Task { @MainActor in
+                    guard let self = self else { return }
+                    if let draft = draft {
+                        self.draftsCache[conversationId] = draft
+                    } else {
+                        self.draftsCache.removeValue(forKey: conversationId)
+                    }
+                }
+            }
+
+            draftListeners[conversationId] = listener
         }
     }
 

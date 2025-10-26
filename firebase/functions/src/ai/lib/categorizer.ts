@@ -198,14 +198,14 @@ Review the CURRENT STATUS TAGS above. Based on the new message, determine which 
 Return ONLY the participants whose tags need updating. Use [] to clear all tags, omit if unchanged.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: "gpt-5-mini",
       messages: [
         {role: "system", content: systemPrompt},
         {role: "user", content: userPrompt},
       ],
       response_format: {type: "json_object"},
-      temperature: 0.3,
-      max_tokens: 500,
+      reasoning_effort: "minimal",
+      // max_completion_tokens: 500,
     });
 
     const responseContent = completion.choices[0]?.message?.content;

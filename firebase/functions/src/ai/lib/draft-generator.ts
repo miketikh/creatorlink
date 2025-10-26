@@ -152,19 +152,19 @@ Write a response as the user (${userId}) would write it, using their voice profi
 
     testLog("  🤖 Calling OpenAI to generate draft", {
       userId,
-      model: "gpt-4o",
+      model: "gpt-5-mini",
       knowledgeFactsUsed: relevantKnowledge.length,
       contextMessages: conversationHistory.length,
     });
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-5-mini",
       messages: [
         {role: "system", content: systemPrompt},
         {role: "user", content: userPrompt},
       ],
-      temperature: 0.7, // Creative but consistent
-      max_tokens: 300, // Reasonable response length
+      reasoning_effort: "minimal",
+      // max_completion_tokens: 300, // Reasonable response length
     });
 
     const draftText = completion.choices[0]?.message?.content;

@@ -77,9 +77,9 @@ Store facts in their knowledge base for future retrieval.
 FORMATTING RULES (match query transformation format):
 - Use "User" as subject (represents the sender whose facts we're storing)
 - Convert to complete, self-contained statements
-- Remove pronouns, use third person
-- Use present tense
 - Be concise and factual
+- Use previous messages context
+- You may extract multiple facts
 
 EXAMPLES:
 Input: "I have three pets"
@@ -88,23 +88,16 @@ Output: "User has three pets"
 Input: Q: "Do you have pets?" A: "Yes, one dog"
 Output: "User has one dog"
 
-Input: Q: "What's his name?" A: "Max"
-Output: "User's dog is named Max"
-
-Input: "I charge $500/hour for consulting"
-Output: "User charges $500/hour for consulting"
-
-Input: "I'm staying in tonight, do you have any plans?"
-Output: "User is staying in tonight"
+Input: previous messages: "What kind of movies do you like? I like action movies.", current message: "I prefer drama, I acted in a drama play last year."
+Output: Using previous context, you can determine that the conversations is about movie preferences, so based on the last message, two new facts are extracted: "User likes drama movies" and "User acted in a drama play last year".
 
 IGNORE:
 - Greetings and pleasantries
 - Questions the user asks others
 - General conversational filler
-- Opinions about topics (unless it's a personal preference/belief)
 
 KEY PRINCIPLE:
-Only extract facts ABOUT the user themselves, not about others they mention.
+Use the previous messages for context, but do not extract facts from previous messages. You are only extracting facts from the current message.
 
 Respond with JSON only: {"facts": [{"text": "normalized fact text"}]}
 If no facts found, return: {"facts": []}`;
@@ -118,14 +111,14 @@ USER: ${messageText}
 Extract all factual information ABOUT the user from the current message, using the conversation context to normalize incomplete answers.`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-5-mini",
       messages: [
         {role: "system", content: systemPrompt},
         {role: "user", content: userPrompt},
       ],
       response_format: {type: "json_object"},
-      temperature: 0.3,
-      max_tokens: 500,
+      reasoning_effort: "minimal",
+      // max_completion_tokens: 500,
     });
 
     const responseContent = completion.choices[0]?.message?.content;
