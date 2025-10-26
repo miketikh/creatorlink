@@ -19,7 +19,6 @@ import * as logger from "firebase-functions/logger";
 import {getOpenAIClient} from "../client";
 import {ConversationMessage} from "./message-fetcher";
 import {OrchestrationDecision} from "../types";
-import {testLog} from "./test-logger";
 
 /**
  * Orchestrate which pipelines should run for a given message.
@@ -46,28 +45,12 @@ export async function orchestrateMessage(
       isAIEnabled,
     });
 
-    testLog("🎯 ORCHESTRATOR FLOW STARTED", {
-      messageText,
-      contextMessageCount: conversationContext.length,
-      participantCount,
-      isAIEnabled,
-    });
-
     const openai = getOpenAIClient();
 
     // Build conversation context string for the AI
     const contextString = conversationContext
       .map((msg) => `[${msg.senderId}]: ${msg.text}`)
       .join("\n");
-
-    testLog("📜 CONVERSATION CONTEXT", {
-      contextMessages: conversationContext.map((msg) => ({
-        senderId: msg.senderId,
-        text: msg.text,
-        timestamp: msg.timestamp,
-      })),
-      contextString,
-    });
 
     const systemPrompt = `You are a message routing orchestrator for an AI-powered messaging app.
 Your job is to decide which processing pipelines should run for a new incoming message.
@@ -130,15 +113,6 @@ Analyze this message and decide which pipelines should run.`;
     if (!responseContent) {
       logger.warn("Empty response from OpenAI orchestrator");
 
-      testLog("⚠️ ORCHESTRATOR EMPTY RESPONSE - FALLBACK TO ALL PIPELINES", {
-        reason: "Empty response from OpenAI",
-        fallbackDecision: {
-          needsGroupAnswer: true,
-          hasNewInformation: true,
-          needsDraftResponse: true,
-        },
-      });
-
       // Return safe default: run all pipelines
       return {
         needsGroupAnswer: true,
@@ -157,13 +131,6 @@ Analyze this message and decide which pipelines should run.`;
       durationMs: duration,
     });
 
-    testLog("✅ ORCHESTRATOR OUTPUT", {
-      needsGroupAnswer: decision.needsGroupAnswer,
-      hasNewInformation: decision.hasNewInformation,
-      needsDraftResponse: decision.needsDraftResponse,
-      durationMs: duration,
-    });
-
     return decision;
 
   } catch (error) {
@@ -173,16 +140,6 @@ Analyze this message and decide which pipelines should run.`;
     logger.error("Message orchestration failed", {
       error: errorMessage,
       durationMs: duration,
-    });
-
-    testLog("❌ ORCHESTRATOR FAILED - FALLBACK TO ALL PIPELINES", {
-      error: errorMessage,
-      durationMs: duration,
-      fallbackDecision: {
-        needsGroupAnswer: true,
-        hasNewInformation: true,
-        needsDraftResponse: true,
-      },
     });
 
     // Return safe default on error: run all pipelines

@@ -24,7 +24,6 @@
  */
 
 import {getOpenAIClient} from "../client";
-import {testLog} from "./test-logger";
 import {ConversationMessage} from "./message-fetcher";
 
 /**
@@ -167,9 +166,6 @@ Transform the latest message into queries to search the recipient's knowledge ba
 
     if (!responseContent) {
       // Fallback: return original query in array if transformation fails
-      testLog("⚠️ QUERY TRANSFORMATION: Failed to transform, using original", {
-        originalQuery: queryText,
-      });
       return [queryText];
     }
 
@@ -178,20 +174,10 @@ Transform the latest message into queries to search the recipient's knowledge ba
       ? parsed.queries.slice(0, 3) // Ensure max 3 queries
       : [queryText]; // Fallback to original
 
-    testLog("🔄 QUERY TRANSFORMATION (Multi-Query)", {
-      original: queryText,
-      queriesGenerated: transformedQueries.length,
-      queries: transformedQueries,
-    });
-
     return transformedQueries;
 
   } catch (error) {
     // Fallback: return original query in array on error
-    testLog("❌ QUERY TRANSFORMATION: Error occurred, using original query", {
-      originalQuery: queryText,
-      error: error instanceof Error ? error.message : String(error),
-    });
     return [queryText];
   }
 }

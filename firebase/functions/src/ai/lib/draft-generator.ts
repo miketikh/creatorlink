@@ -13,7 +13,6 @@ import {
 import {ConversationMessage, fetchConversationMessages} from "./message-fetcher";
 import {loadVoiceProfile} from "./voice-profile-loader";
 import {searchKnowledgeWithScores} from "./knowledge-retriever";
-import {testLog} from "./test-logger";
 
 /**
  * Generate a personalized draft response for a user.
@@ -36,26 +35,9 @@ export async function generateDraft(
   category: ConversationCategory
 ): Promise<DraftGenerationResult> {
   try {
-    // logger.info("Starting draft generation", {
-    //   userId,
-    //   conversationId,
-    //   category,
-    //   incomingMessageCount: incomingMessages.length,
-    // });
-
-    testLog("  🎨 GENERATING DRAFT", {
-      userId,
-      category,
-      incomingMessageCount: incomingMessages.length,
-    });
-
     // Fetch voice profile for user + category
     const voiceProfile = await loadVoiceProfile(userId, category);
     if (!voiceProfile) {
-      // logger.warn("Cannot generate draft: no voice profile", {
-      //   userId,
-      //   category,
-      // });
       return {
         success: false,
         reason: "No voice profile available for user and category",
@@ -75,23 +57,6 @@ export async function generateDraft(
     // Note: Threshold 0.45 calibrated for text-embedding-3-small model
     const knowledgeResults = await searchKnowledgeWithScores(promptText, userId, 5, conversationHistory);
     const relevantKnowledge = knowledgeResults.filter(result => result.similarity > 0.45);
-
-    testLog("  📚 Knowledge retrieval complete", {
-      userId,
-      queryText: promptText.substring(0, 100) + (promptText.length > 100 ? '...' : ''),
-      totalResults: knowledgeResults.length,
-      relevantResults: relevantKnowledge.length,
-      topFacts: relevantKnowledge.slice(0, 5).map(r => ({
-        text: r.fact.text.substring(0, 60) + (r.fact.text.length > 60 ? '...' : ''),
-        similarity: r.similarity.toFixed(3),
-        passedThreshold: r.similarity > 0.45,
-      })),
-      // Show below-threshold results for debugging
-      belowThresholdSample: knowledgeResults.filter(r => r.similarity <= 0.45).slice(0, 3).map(r => ({
-        text: r.fact.text.substring(0, 60) + (r.fact.text.length > 60 ? '...' : ''),
-        similarity: r.similarity.toFixed(3),
-      })),
-    });
 
     // Build LLM prompt
     const openai = getOpenAIClient();
@@ -150,13 +115,6 @@ ${latestMessages.map(msg => `${msg.senderId}: ${msg.text}`).join("\n")}
 
 Write a response as the user (${userId}) would write it, using their voice profile style.`;
 
-    testLog("  🤖 Calling OpenAI to generate draft", {
-      userId,
-      model: "gpt-5-mini",
-      knowledgeFactsUsed: relevantKnowledge.length,
-      contextMessages: conversationHistory.length,
-    });
-
     const completion = await openai.chat.completions.create({
       model: "gpt-5-mini",
       messages: [
@@ -170,7 +128,6 @@ Write a response as the user (${userId}) would write it, using their voice profi
     const draftText = completion.choices[0]?.message?.content;
 
     if (!draftText) {
-      // logger.warn("Empty response from OpenAI draft generation");
       return {
         success: false,
         reason: "Empty response from AI model",
@@ -188,22 +145,6 @@ Write a response as the user (${userId}) would write it, using their voice profi
       updatedAt: now,
     };
 
-    // const duration = Date.now() - startTime;
-    // logger.info("Draft generation complete", {
-    //   userId,
-    //   conversationId,
-    //   draftLength: draftText.length,
-    //   knowledgeFactsFound: relevantKnowledge.length,
-    //   durationMs: duration,
-    // });
-
-    testLog("  ✅ Draft text generated", {
-      userId,
-      draftPreview: draftText.substring(0, 80) + (draftText.length > 80 ? '...' : ''),
-      draftLength: draftText.length,
-      knowledgeFactsUsed: relevantKnowledge.length,
-    });
-
     return {
       success: true,
       draft,
@@ -211,15 +152,6 @@ Write a response as the user (${userId}) would write it, using their voice profi
     };
 
   } catch (error) {
-    // const duration = Date.now() - startTime;
-    // logger.error("Draft generation failed", {
-    //   userId,
-    //   conversationId,
-    //   category,
-    //   error: error instanceof Error ? error.message : String(error),
-    //   durationMs: duration,
-    // });
-
     return {
       success: false,
       error: error instanceof Error ? error.message : String(error),

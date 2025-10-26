@@ -14,7 +14,6 @@
  */
 
 import * as logger from "firebase-functions/logger";
-import {testLog} from "../ai/lib/test-logger";
 import {
   // detectIfQuestion,
   fetchConversationMessages,
@@ -68,14 +67,6 @@ export async function runKnowledgeExtractionPipeline(context: MessageContext): P
     }
 
     // Orchestrator handles decision - if we're here, orchestrator already determined this has information
-    // const questionResult = await detectIfQuestion(context.messageText);
-    // if (questionResult.isQuestion) {
-    //   logger.info("Knowledge Extraction Pipeline: Skipping (question)", {
-    //     messageId: context.messageId,
-    //     confidence: questionResult.confidence,
-    //   });
-    //   return;
-    // }
 
     // Fetch recent messages for context
     const recentMessages = await fetchConversationMessages(context.conversationId, 5);
@@ -87,10 +78,6 @@ export async function runKnowledgeExtractionPipeline(context: MessageContext): P
       return;
     }
 
-    testLog("🧠 KNOWLEDGE EXTRACTION: Processing message for user", {
-      userId: context.senderId,
-    });
-
     // Extract knowledge from message with context
     const extractionResult = await extractKnowledge(
       context.messageText,
@@ -99,46 +86,17 @@ export async function runKnowledgeExtractionPipeline(context: MessageContext): P
     );
 
     if (!extractionResult.success) {
-      testLog("❌ KNOWLEDGE EXTRACTION: Failed", {
-        userId: context.senderId,
-        error: extractionResult.error,
-      });
       return;
     }
 
     if (extractionResult.facts.length === 0) {
-      testLog("ℹ️ KNOWLEDGE EXTRACTION: No facts found", {
-        userId: context.senderId,
-      });
       return;
     }
 
-    testLog("📝 KNOWLEDGE EXTRACTION: Facts extracted", {
-      userId: context.senderId,
-      factCount: extractionResult.facts.length,
-    });
-
     // Store each extracted fact
-    let storedCount = 0;
-    let skippedCount = 0;
-
     for (const fact of extractionResult.facts) {
       try {
-        const factId = await storeKnowledgeFact(fact);
-
-        if (factId) {
-          storedCount++;
-          testLog("✅ STORED KNOWLEDGE", {
-            userId: fact.userId,
-            fact: fact.text,
-          });
-        } else {
-          skippedCount++;
-          testLog("⏭️ SKIPPED (too similar to existing)", {
-            userId: fact.userId,
-            fact: fact.text,
-          });
-        }
+        await storeKnowledgeFact(fact);
       } catch (error) {
         logger.error("Knowledge Extraction Pipeline: Failed to store fact", {
           text: fact.text,
@@ -146,12 +104,6 @@ export async function runKnowledgeExtractionPipeline(context: MessageContext): P
         });
       }
     }
-
-    testLog("📊 KNOWLEDGE EXTRACTION COMPLETE", {
-      userId: context.senderId,
-      stored: storedCount,
-      skipped: skippedCount,
-    });
 
   } catch (error) {
     // Catch all errors to prevent blocking other pipelines

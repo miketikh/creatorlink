@@ -59,21 +59,6 @@ export async function runGroupFAQPipeline(context: MessageContext): Promise<void
 
     // Filter 4: Detect if message is a question
     // Orchestrator handles decision - if we're here, orchestrator already determined this is a question
-    // const questionResult = await detectIfQuestion(context.messageText);
-
-    // logger.info("Group FAQ Pipeline: Question detection result", {
-    //   messageId: context.messageId,
-    //   isQuestion: questionResult.isQuestion,
-    //   confidence: questionResult.confidence,
-    // });
-
-    // if (!questionResult.isQuestion) {
-    //   logger.info("Group FAQ Pipeline: Skipping (not a question)", {
-    //     messageId: context.messageId,
-    //     confidence: questionResult.confidence,
-    //   });
-    //   return;
-    // }
 
     logger.info("Group FAQ Pipeline: Processing question for FAQ detection", {
       messageId: context.messageId,

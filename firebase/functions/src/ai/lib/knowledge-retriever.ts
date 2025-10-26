@@ -12,7 +12,6 @@ import * as admin from "firebase-admin";
 import * as logger from "firebase-functions/logger";
 import {KnowledgeFact} from "../types";
 import {generateEmbedding} from "./embedding-generator";
-import {testLog} from "./test-logger";
 import {transformQuery} from "./query-transformer";
 import {ConversationMessage} from "./message-fetcher";
 
@@ -163,13 +162,6 @@ export async function searchKnowledgeWithScores(
     // Uses conversation history for context (e.g., "u?" → ["User has pets"] if discussing pets)
     const transformedQueries = await transformQuery(queryText, conversationHistory);
 
-    testLog("🔍 MULTI-QUERY SEARCH: Starting", {
-      userId,
-      originalQuery: queryText.substring(0, 100),
-      queriesGenerated: transformedQueries.length,
-      queries: transformedQueries,
-    });
-
     // Get all facts for user once (we'll search against them for each query)
     const db = admin.firestore();
     const snapshot = await db.collection("knowledge")
@@ -178,35 +170,8 @@ export async function searchKnowledgeWithScores(
 
     if (snapshot.empty) {
       logger.info("No knowledge facts found for user", {userId});
-
-      // Diagnostic: Query ALL documents to check if any exist
-      const allDocsSnapshot = await db.collection("knowledge").limit(10).get();
-
-      testLog("🚨 KNOWLEDGE RETRIEVAL: ZERO results for userId", {
-        userId,
-        originalQuery: queryText.substring(0, 100),
-        queries: transformedQueries,
-        totalDocsInCollection: allDocsSnapshot.size,
-        sampleDocs: allDocsSnapshot.docs.slice(0, 5).map(d => ({
-          docId: d.id,
-          userId: d.data().userId,
-          text: d.data().text?.substring(0, 50),
-        })),
-      });
-
       return [];
     }
-
-    testLog("✅ KNOWLEDGE RETRIEVAL: Found documents for userId", {
-      userId,
-      originalQuery: queryText.substring(0, 100),
-      queries: transformedQueries,
-      totalDocuments: snapshot.size,
-      sampleFacts: snapshot.docs.slice(0, 3).map(d => ({
-        docId: d.id,
-        text: d.data().text.substring(0, 50),
-      })),
-    });
 
     // Process each query and collect results
     const allQueryResults: Array<{
@@ -266,15 +231,6 @@ export async function searchKnowledgeWithScores(
         query,
         results: queryResults,
       });
-
-      testLog(`  📊 Query ${allQueryResults.length}/${transformedQueries.length} results`, {
-        query: query.substring(0, 100),
-        resultsFound: queryResults.length,
-        topResults: queryResults.slice(0, 3).map(r => ({
-          text: r.fact.text.substring(0, 60),
-          similarity: r.similarity.toFixed(3),
-        })),
-      });
     }
 
     // Merge results using simple deduplication (keep highest similarity per fact)
@@ -293,19 +249,6 @@ export async function searchKnowledgeWithScores(
     const finalResults = Array.from(mergedResults.values())
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, topK);
-
-    testLog("🔍 MULTI-QUERY SEARCH: Complete", {
-      userId,
-      originalQuery: queryText.substring(0, 100),
-      queriesProcessed: transformedQueries.length,
-      totalResultsBeforeMerge: allQueryResults.reduce((sum, qr) => sum + qr.results.length, 0),
-      uniqueResultsAfterMerge: mergedResults.size,
-      finalTopK: finalResults.length,
-      topResults: finalResults.slice(0, 5).map(r => ({
-        text: r.fact.text.substring(0, 60),
-        similarity: r.similarity.toFixed(3),
-      })),
-    });
 
     return finalResults;
 

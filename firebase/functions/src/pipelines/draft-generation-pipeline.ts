@@ -17,7 +17,6 @@
 
 import * as logger from "firebase-functions/logger";
 import * as admin from "firebase-admin";
-import {testLog} from "../ai/lib/test-logger";
 import {
   fetchConversationMessages,
   checkDraftPrerequisites,
@@ -42,34 +41,20 @@ interface MessageContext {
  */
 export async function runDraftGenerationPipeline(context: MessageContext): Promise<void> {
   try {
-    testLog("🚀 DRAFT GENERATION PIPELINE: Starting", {
-      conversationId: context.conversationId,
-      messageId: context.messageId,
-    });
-
     // Check feature flag (default enabled)
     const draftGenerationEnabled = process.env.ENABLE_DRAFT_GENERATION !== "false";
 
     if (!draftGenerationEnabled) {
-      testLog("⚠️ Draft Generation Pipeline: Disabled by feature flag", {
-        conversationId: context.conversationId,
-      });
       return;
     }
 
     // Filter 1: Skip if message from AI user
     if (context.senderId === AI_USER_ID) {
-      testLog("⚠️ Draft Generation Pipeline: Skipping (AI message)", {
-        messageId: context.messageId,
-      });
       return;
     }
 
     // Filter 2: Skip if message from system
     if (context.senderId === "system") {
-      testLog("⚠️ Draft Generation Pipeline: Skipping (system message)", {
-        messageId: context.messageId,
-      });
       return;
     }
 
@@ -87,36 +72,9 @@ export async function runDraftGenerationPipeline(context: MessageContext): Promi
       (userId: string) => userId !== context.senderId && userId !== AI_USER_ID
     );
 
-    // Fetch recent messages for context display
-    const recentMessagesForLog = await fetchConversationMessages(context.conversationId, 5);
-    testLog("💬 DRAFT GENERATION: Message received", {
-      conversationId: context.conversationId,
-      category,
-      recipientCount: recipients.length,
-      recentMessageCount: recentMessagesForLog.length,
-      lastMessages: recentMessagesForLog.slice(-3).map(m => ({
-        from: m.senderId,
-        text: m.text.substring(0, 50) + (m.text.length > 50 ? '...' : '')
-      }))
-    });
-
     // Process each recipient
     for (const recipientId of recipients) {
       try {
-        testLog("📥 MESSAGE RECEIVED for draft generation", {
-          conversationId: context.conversationId,
-          incomingMessage: context.messageText.substring(0, 100) + (context.messageText.length > 100 ? '...' : ''),
-          sender: context.senderId,
-          recipient: recipientId,
-          category,
-        });
-
-        testLog("🔍 CHECKING: Should draft be generated?", {
-          recipientId,
-          category,
-          messageText: context.messageText.substring(0, 100) + (context.messageText.length > 100 ? '...' : '')
-        });
-
         // Fetch recent messages for context (needed for prerequisite check and draft generation)
         const recentMessages = await fetchConversationMessages(context.conversationId, 10);
 
@@ -130,10 +88,6 @@ export async function runDraftGenerationPipeline(context: MessageContext): Promi
         );
 
         if (!prerequisitesMet) {
-          testLog("❌ DECISION: No draft (prerequisites not met)", {
-            recipientId,
-            category,
-          });
           continue; // Skip this recipient
         }
 
@@ -144,22 +98,11 @@ export async function runDraftGenerationPipeline(context: MessageContext): Promi
         const shouldUpdate = await shouldUpdateDraft(existingDraft);
 
         if (!shouldUpdate) {
-          testLog("⏭️ DECISION: Draft already up-to-date", {
-            recipientId,
-            conversationId: context.conversationId,
-          });
           continue;
         }
         const incomingMessages = recentMessages.filter(
           msg => msg.id === context.messageId || msg.senderId !== recipientId
         );
-
-        // Generate draft
-        testLog("🎨 GENERATING: Creating draft with voice profile", {
-          recipientId,
-          category,
-          incomingMessageCount: incomingMessages.length,
-        });
 
         const draftResult = await generateDraft(
           recipientId,
@@ -169,23 +112,11 @@ export async function runDraftGenerationPipeline(context: MessageContext): Promi
         );
 
         if (!draftResult.success || !draftResult.draft) {
-          testLog("❌ DECISION: Draft generation failed", {
-            recipientId,
-            reason: draftResult.reason,
-            error: draftResult.error,
-          });
           continue;
         }
 
         // Save draft to Firestore
         await saveDraft(draftResult.draft);
-
-        testLog("✅ DECISION: Draft generated and saved", {
-          recipientId,
-          category,
-          draftPreview: draftResult.draft.text.substring(0, 100) + '...',
-          draftLength: draftResult.draft.text.length,
-        });
 
       } catch (error) {
         logger.error("Draft Generation Pipeline: Error for recipient", {
@@ -196,11 +127,6 @@ export async function runDraftGenerationPipeline(context: MessageContext): Promi
         // Continue to next recipient
       }
     }
-
-    testLog("✅ DRAFT GENERATION PIPELINE: Complete", {
-      conversationId: context.conversationId,
-      recipientCount: recipients.length,
-    });
 
   } catch (error) {
     // Catch all errors to prevent blocking other pipelines

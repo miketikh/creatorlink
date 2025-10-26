@@ -17,15 +17,11 @@ struct AuthView: View {
         VStack(spacing: 30) {
             Spacer()
 
-            // App Logo/Icon
-            Image(systemName: "bubble.left.and.bubble.right.fill")
-                .font(.system(size: 80))
-                .foregroundColor(.blue)
-
-            // App Title
-            Text("CreatorLink")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+            // App Logo
+            Image("AppName")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 120)
 
             // Tagline
             Text("Messaging for Content Creators")
