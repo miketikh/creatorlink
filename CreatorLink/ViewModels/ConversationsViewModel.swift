@@ -42,19 +42,11 @@ class ConversationsViewModel {
             return conversations
         }
 
-        var filtered = conversations
-
-        // Filter by category tags (OR logic - show if ANY tag matches)
-        if !selectedCategoryFilters.isEmpty {
-            filtered = filtered.filter { conversation in
-                let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
-                return selectedCategoryFilters.contains { categoryFilter in
-                    userTags.categories.contains(categoryFilter)
-                }
-            }
-        }
+        // Start with category-filtered conversations (hierarchical base)
+        var filtered = categoryFilteredConversations
 
         // Filter by status tags (OR logic - show if ANY tag matches)
+        // This now applies to category-filtered set only
         if !selectedStatusFilters.isEmpty {
             filtered = filtered.filter { conversation in
                 let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
@@ -69,6 +61,27 @@ class ConversationsViewModel {
             filtered = filtered.filter { conversation in
                 let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
                 return !userTags.statuses.contains(.resolved)
+            }
+        }
+
+        return filtered
+    }
+
+    /// Returns conversations filtered by category only (base for status filtering and counts)
+    var categoryFilteredConversations: [Conversation] {
+        guard let userId = currentUserId else {
+            return conversations
+        }
+
+        var filtered = conversations
+
+        // Apply category filter
+        if !selectedCategoryFilters.isEmpty {
+            filtered = filtered.filter { conversation in
+                let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+                return selectedCategoryFilters.contains { categoryFilter in
+                    userTags.categories.contains(categoryFilter)
+                }
             }
         }
 
@@ -434,14 +447,40 @@ class ConversationsViewModel {
         }.count
     }
 
-    /// Computed property for urgent conversation count
+    /// Computed property for urgent conversation count (based on category-filtered conversations)
     var urgentCount: Int {
-        getUrgentConversations().count
+        guard let userId = currentUserId else {
+            return 0
+        }
+
+        return categoryFilteredConversations.filter { conversation in
+            let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+            return userTags.statuses.contains(.urgent)
+        }.count
     }
 
-    /// Computed property for needs response count
+    /// Computed property for needs response count (based on category-filtered conversations)
     var needsResponseCount: Int {
-        getConversationsWithStatus(.needsResponse).count
+        guard let userId = currentUserId else {
+            return 0
+        }
+
+        return categoryFilteredConversations.filter { conversation in
+            let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+            return userTags.statuses.contains(.needsResponse)
+        }.count
+    }
+
+    /// Computed property for awaiting reply count (based on category-filtered conversations)
+    var awaitingReplyCount: Int {
+        guard let userId = currentUserId else {
+            return 0
+        }
+
+        return categoryFilteredConversations.filter { conversation in
+            let userTags = taggingService.getEffectiveTags(conversation: conversation, userId: userId)
+            return userTags.statuses.contains(.awaitingReply)
+        }.count
     }
 
     // MARK: - Tag Helpers

@@ -71,7 +71,7 @@ struct FilterBarView: View {
                     FilterChipView(
                         emoji: StatusTag.awaitingReply.emoji,
                         label: StatusTag.awaitingReply.displayName,
-                        count: nil,
+                        count: viewModel.awaitingReplyCount,
                         isSelected: viewModel.selectedStatusFilters.contains(.awaitingReply),
                         onTap: {
                             viewModel.toggleStatusFilter(.awaitingReply)
