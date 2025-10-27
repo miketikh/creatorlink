@@ -78,8 +78,8 @@ async function seedAIGroupTest(auth, db) {
   const sortedParticipantIds = [...participantIds].sort();
 
   const conversationId = db.collection('conversations').doc().id;
-  // Most recent message will be at 3 minutes ago (60 - 19*3 = 3)
-  const lastMessageTime = getTimestamp(0, 0, 3);
+  // Event Planning should appear second (after Frank, before Emma)
+  const lastMessageTime = getTimestamp(0, 0, 2);
 
   const conversationData = {
     participantIds: sortedParticipantIds,
@@ -143,7 +143,7 @@ async function seedAIGroupTest(auth, db) {
     const { senderId, text } = messageTexts[i];
 
     // Calculate timestamp (messages spread over ~60 minutes, oldest to newest)
-    const minutesAgo = 60 - (i * 3); // Most recent message is 3 minutes ago
+    const minutesAgo = 59 - (i * 3); // Most recent message is 2 minutes ago (59 - 19*3 = 2)
     const messageTimestamp = getTimestamp(0, 0, minutesAgo);
 
     // Create readBy map (all messages are read for simplicity)
@@ -210,7 +210,8 @@ async function seedAIGroupTest(auth, db) {
   const festivalParticipantIds = [alice, bob, carol, david, AI_USER.uid];
   const festivalSortedIds = [...festivalParticipantIds].sort();
   const festivalConversationId = db.collection('conversations').doc().id;
-  const festivalLastMessageTime = getTimestamp(0, 0, 2);
+  // Music Festival should appear last (oldest conversation)
+  const festivalLastMessageTime = getTimestamp(0, 0, 8);
 
   const festivalConversationData = {
     participantIds: festivalSortedIds,
@@ -267,7 +268,7 @@ async function seedAIGroupTest(auth, db) {
     const messageId = db.collection('messages').doc().id;
     const { senderId, text } = festivalMessages[i];
 
-    const minutesAgo = 90 - (i * 4);
+    const minutesAgo = 84 - (i * 4); // Most recent message is 8 minutes ago (84 - 19*4 = 8)
     const messageTimestamp = getTimestamp(0, 0, minutesAgo);
 
     const readBy = {};
@@ -318,7 +319,8 @@ async function seedAIGroupTest(auth, db) {
   const mexicoParticipantIds = [alice, bob, carol, david, AI_USER.uid];
   const mexicoSortedIds = [...mexicoParticipantIds].sort();
   const mexicoConversationId = db.collection('conversations').doc().id;
-  const mexicoLastMessageTime = getTimestamp(0, 0, 1);
+  // Mexico Trip should appear between Bob (4 min) and David (6 min)
+  const mexicoLastMessageTime = getTimestamp(0, 0, 5);
 
   const mexicoConversationData = {
     participantIds: mexicoSortedIds,
@@ -375,7 +377,7 @@ async function seedAIGroupTest(auth, db) {
     const messageId = db.collection('messages').doc().id;
     const { senderId, text } = mexicoMessages[i];
 
-    const minutesAgo = 120 - (i * 5);
+    const minutesAgo = 100 - (i * 5); // Most recent message is 5 minutes ago (100 - 19*5 = 5)
     const messageTimestamp = getTimestamp(0, 0, minutesAgo);
 
     const readBy = {};

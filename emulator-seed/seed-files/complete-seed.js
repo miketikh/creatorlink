@@ -77,7 +77,8 @@ async function createCategorizationConversation(
   participantIds,
   messages,
   tagsByUser = {},
-  primaryCategory = null
+  primaryCategory = null,
+  lastMessageMinutesAgo = 0
 ) {
   const conversationId = db.collection('conversations').doc().id;
   const sortedParticipantIds = [...participantIds].sort();
@@ -94,7 +95,7 @@ async function createCategorizationConversation(
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
-    const minutesAgo = (messages.length - 1 - i) * 5; // Space messages 5 minutes apart
+    const minutesAgo = lastMessageMinutesAgo + (messages.length - 1 - i) * 5; // Space messages 5 minutes apart, offset by lastMessageMinutesAgo
 
     // Determine who has read this message:
     // Anyone who sends a message at or after this point has read this message
@@ -200,7 +201,8 @@ async function seedCompleteSeed(auth, db) {
         statusTags: ['awaitingReply', 'urgent']
       }
     },
-    'business'
+    'business',
+    7 // Last message 7 minutes ago
   );
   console.log('  ✓ Carol ↔ Alice: Business partnership (3 messages, should detect: business, urgent)');
 
@@ -233,7 +235,8 @@ async function seedCompleteSeed(auth, db) {
         statusTags: ['awaitingReply']
       }
     },
-    'collaboration'
+    'collaboration',
+    6 // Last message 6 minutes ago
   );
   console.log('  ✓ David ↔ Alice: Creative collaboration (3 messages, should detect: collaboration)');
 
@@ -278,7 +281,8 @@ async function seedCompleteSeed(auth, db) {
         statusTags: ['needsResponse']
       }
     },
-    'social'
+    'social',
+    4 // Last message 4 minutes ago
   );
   console.log('  ✓ Alice ↔ Bob: Casual hangout plans (6 messages, should detect: social)');
 
@@ -311,7 +315,8 @@ async function seedCompleteSeed(auth, db) {
         statusTags: ['needsResponse']
       }
     },
-    'social'
+    'social',
+    3 // Last message 3 minutes ago
   );
   console.log('  ✓ Emma ↔ Alice: Catching up (3 messages, should detect: social)');
 
@@ -336,7 +341,8 @@ async function seedCompleteSeed(auth, db) {
         statusTags: ['awaitingReply']
       }
     },
-    'fan'
+    'fan',
+    1 // Last message 1 minute ago (most recent)
   );
   console.log('  ✓ Frank → Alice: Fan appreciation (1 message, should detect: fan)\n');
 
